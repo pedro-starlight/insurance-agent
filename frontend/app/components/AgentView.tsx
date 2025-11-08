@@ -130,7 +130,11 @@ export default function AgentView() {
         // Clear conversation when new call starts
         console.log('AgentView: Clearing conversation for new call');
         setConversationId(null);
+        setCurrentClaimId(null);
         setTranscriptions([]);
+        setLogs([]);
+        localStorage.removeItem('currentClaimId');
+        localStorage.removeItem('currentConversationId');
       } else if (e.key === 'latestTranscription') {
         // Handle real-time transcription updates from PolicyholderView
         if (e.newValue) {
@@ -295,10 +299,14 @@ export default function AgentView() {
           // Parse the transcription text (format: "Agent: message\nUser: message")
           const fullTranscription = transcriptionData.transcription;
           console.log('AgentView: Full transcription text:', fullTranscription.substring(0, 200) + '...');
+          console.log('AgentView: Transcription length:', fullTranscription.length);
+          console.log('AgentView: Contains newlines:', fullTranscription.includes('\n'));
+          console.log('AgentView: Newline count:', (fullTranscription.match(/\n/g) || []).length);
           
           // Split by lines and parse speaker labels
           const lines = fullTranscription.split('\n').filter(line => line.trim());
           console.log('AgentView: Parsed', lines.length, 'transcription lines');
+          console.log('AgentView: First 3 lines:', lines.slice(0, 3));
           
           const newTranscriptions: TranscriptionMessage[] = lines.map((line: string) => {
             // Parse format: "Agent: message" or "User: message"
