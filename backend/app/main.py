@@ -618,6 +618,43 @@ async def get_claim_from_conversation(conversation_id: str):
                 "claim_id": cid
             }
     
+    # Fallback: Check if conversation file exists and create claim on-demand
+    # This handles cases where server restarted or webhook failed to create claim
+    conversations_dir = os.path.join(os.path.dirname(__file__), 'data', 'conversations')
+    conversation_file = os.path.join(conversations_dir, f"{conversation_id}.json")
+    
+    if os.path.exists(conversation_file):
+        print(f"⚠️ No claim found for {conversation_id}, creating from saved file...")
+        try:
+            with open(conversation_file, 'r') as f:
+                data = json.load(f)
+                transcription_text = data.get("transcription", "")
+                
+                if transcription_text:
+                    # Create a new claim
+                    new_claim_id = claim_service.create_claim()
+                    claim_service.update_claim(
+                        new_claim_id,
+                        transcription=transcription_text,
+                        conversation_id=conversation_id,
+                        status=ClaimStatus.PENDING
+                    )
+                    
+                    # Store mapping
+                    conversation_to_claim[conversation_id] = new_claim_id
+                    
+                    print(f"✅ Created claim {new_claim_id} for conversation {conversation_id}")
+                    add_log(new_claim_id, f"Claim created on-demand from saved conversation file", "info")
+                    
+                    return {
+                        "conversation_id": conversation_id,
+                        "claim_id": new_claim_id
+                    }
+        except Exception as e:
+            print(f"❌ Error creating claim from conversation file: {e}")
+            import traceback
+            traceback.print_exc()
+    
     raise HTTPException(status_code=404, detail="No claim found for this conversation")
 
 
