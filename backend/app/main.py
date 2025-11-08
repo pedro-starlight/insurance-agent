@@ -12,6 +12,10 @@ import os
 import json
 import hmac
 import hashlib
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(title="Insurance Agent API", version="1.0.0")
 
