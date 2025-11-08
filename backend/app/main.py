@@ -40,6 +40,9 @@ log_queues: Dict[str, Queue] = {}
 # Store for agent outputs per claim (claim_id -> UnifiedAgentOutput)
 agent_outputs: Dict[str, UnifiedAgentOutput] = {}
 
+# Store mapping from conversation_id to claim_id
+conversation_to_claim: Dict[str, str] = {}
+
 
 # Middleware to log all requests to webhook endpoint
 @app.middleware("http")
@@ -91,18 +94,28 @@ async def stream_logs(claim_id: str):
                 for log in system_logs[claim_id]:
                     yield f"data: {json.dumps(log)}\n\n"
             
+            # Send a keepalive message to establish connection
+            yield f": keepalive\n\n"
+            
             # Then stream new logs
             while True:
-                log = await queue.get()
-                if log is None:  # Sentinel to close stream
-                    break
-                yield f"data: {json.dumps(log)}\n\n"
+                try:
+                    # Use asyncio.wait_for to allow periodic keepalive messages
+                    log = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if log is None:  # Sentinel to close stream
+                        break
+                    yield f"data: {json.dumps(log)}\n\n"
+                except asyncio.TimeoutError:
+                    # Send keepalive to prevent connection timeout
+                    yield f": keepalive\n\n"
+                    continue
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            print(f"Error in SSE stream for claim {claim_id}: {e}")
         finally:
-            # Cleanup
-            if claim_id in log_queues:
-                del log_queues[claim_id]
+            # Don't delete queue on disconnect - allow reconnection
+            pass
     
     return StreamingResponse(
         event_generator(),
@@ -140,31 +153,73 @@ async def get_coverage(claim_id: str):
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
-    coverage = coverage_service.check_coverage(claim)
-    return {
-        "claim_id": claim_id,
-        "claim_details": {
-            # Structured fields
-            "full_name": claim.full_name,
-            "car_model": claim.car_model.dict() if claim.car_model else None,
-            "location_data": claim.location_data.dict() if claim.location_data else None,
-            "assistance_type": claim.assistance_type,
-            "safety_status": claim.safety_status,
-            "confirmation": claim.confirmation,
-            # Legacy fields (for backward compatibility)
-            "policyholder_name": claim.policyholder_name,
-            "car_info": claim.car_info,
-            "location": claim.location,
-            "damage_type": claim.damage_type,
-            "situation": claim.situation
-        },
-        "coverage_decision": {
-            "covered": coverage.covered,
-            "reasoning": coverage.reasoning,
-            "policy_section": coverage.policy_section,
-            "confidence": coverage.confidence
+    # Get agent output if available
+    agent_output = agent_outputs.get(claim_id)
+    
+    if agent_output:
+        # Use agent output for coverage decision
+        return {
+            "claim_id": claim_id,
+            "claim_details": {
+                # Structured fields
+                "full_name": agent_output.full_name,
+                "car_model": {
+                    "make": agent_output.car_make,
+                    "model": agent_output.car_model,
+                    "year": agent_output.car_year
+                } if agent_output.car_make else None,
+                "location_data": {
+                    "free_text": agent_output.location,
+                    "components": {
+                        "city": agent_output.city,
+                        "road_or_street": "",
+                        "direction": "",
+                        "landmark_or_exit": ""
+                    }
+                } if agent_output.location else None,
+                "assistance_type": agent_output.assistance_type,
+                "safety_status": agent_output.safety_status,
+                "confirmation": "confirmed",
+                # Legacy fields (for backward compatibility)
+                "policyholder_name": agent_output.full_name,
+                "car_info": f"{agent_output.car_year} {agent_output.car_make} {agent_output.car_model}",
+                "location": agent_output.location,
+                "damage_type": agent_output.assistance_type,
+                "situation": agent_output.safety_status
+            },
+            "coverage_decision": {
+                "covered": agent_output.coverage_covered,
+                "reasoning": agent_output.coverage_reasoning,
+                "policy_section": agent_output.coverage_policy_section,
+                "confidence": agent_output.coverage_confidence
+            }
         }
-    }
+    else:
+        # Fallback to claim data if agent hasn't processed yet
+        return {
+            "claim_id": claim_id,
+            "claim_details": {
+                # Structured fields
+                "full_name": claim.full_name,
+                "car_model": claim.car_model.dict() if claim.car_model else None,
+                "location_data": claim.location_data.dict() if claim.location_data else None,
+                "assistance_type": claim.assistance_type,
+                "safety_status": claim.safety_status,
+                "confirmation": claim.confirmation,
+                # Legacy fields (for backward compatibility)
+                "policyholder_name": getattr(claim, 'policyholder_name', claim.full_name),
+                "car_info": getattr(claim, 'car_info', ''),
+                "location": getattr(claim, 'location', ''),
+                "damage_type": getattr(claim, 'damage_type', ''),
+                "situation": getattr(claim, 'situation', '')
+            },
+            "coverage_decision": {
+                "covered": False,
+                "reasoning": "Agent is still processing this claim",
+                "policy_section": None,
+                "confidence": 0.0
+            }
+        }
 
 
 @app.get("/claim/action/{claim_id}")
@@ -174,19 +229,43 @@ async def get_action(claim_id: str):
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
-    coverage = coverage_service.check_coverage(claim)
-    action = action_service.recommend_action(claim, coverage)
+    # Get agent output if available
+    agent_output = agent_outputs.get(claim_id)
     
-    return {
-        "claim_id": claim_id,
-        "action": {
-            "type": action.action.value,
-            "garage_name": action.garage_name,
-            "garage_location": action.garage_location,
-            "reasoning": action.reasoning,
-            "estimated_time": action.estimated_time
+    if agent_output:
+        # Use agent output for action recommendation
+        return {
+            "claim_id": claim_id,
+            "action": {
+                "type": agent_output.action_type,
+                "garage_name": agent_output.action_garage_name,
+                "garage_location": agent_output.action_garage_location,
+                "reasoning": agent_output.action_reasoning,
+                "estimated_time": agent_output.action_estimated_time
+            }
         }
-    }
+    else:
+        # Fallback: use legacy action service if agent hasn't processed yet
+        # Create a minimal coverage decision for the legacy function
+        from app.models import CoverageDecision
+        coverage = CoverageDecision(
+            claim_id=claim_id,
+            covered=False,
+            reasoning="Agent is still processing this claim",
+            confidence=0.0
+        )
+        action = action_service.recommend_action(claim, coverage)
+        
+        return {
+            "claim_id": claim_id,
+            "action": {
+                "type": action.action.value,
+                "garage_name": action.garage_name,
+                "garage_location": action.garage_location,
+                "reasoning": action.reasoning,
+                "estimated_time": action.estimated_time
+            }
+        }
 
 
 @app.get("/claim/message/{claim_id}")
@@ -196,18 +275,39 @@ async def get_message(claim_id: str):
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
-    coverage = coverage_service.check_coverage(claim)
-    action = action_service.recommend_action(claim, coverage)
-    message = generate_message(claim, coverage, action)
+    # Get agent output if available
+    agent_output = agent_outputs.get(claim_id)
     
-    return {
-        "claim_id": claim_id,
-        "message": {
-            "assessment": message.assessment,
-            "next_actions": message.next_actions,
-            "sent_at": message.sent_at.isoformat()
+    if agent_output:
+        # Use agent output for message
+        return {
+            "claim_id": claim_id,
+            "message": {
+                "assessment": agent_output.message_assessment,
+                "next_actions": agent_output.message_next_actions,
+                "sent_at": datetime.now().isoformat()
+            }
         }
-    }
+    else:
+        # Fallback: use legacy message generation if agent hasn't processed yet
+        from app.models import CoverageDecision
+        coverage = CoverageDecision(
+            claim_id=claim_id,
+            covered=False,
+            reasoning="Agent is still processing this claim",
+            confidence=0.0
+        )
+        action = action_service.recommend_action(claim, coverage)
+        message = generate_message(claim, coverage, action)
+        
+        return {
+            "claim_id": claim_id,
+            "message": {
+                "assessment": message.assessment,
+                "next_actions": message.next_actions,
+                "sent_at": message.sent_at.isoformat()
+            }
+        }
 
 
 @app.get("/claim/logs/{claim_id}")
@@ -372,8 +472,9 @@ async def receive_transcription_webhook(request: Request):
         claim_id = claim_service.create_claim()
         add_log(claim_id, f"Claim created for conversation: {conversation_id}", "info")
         
-        # Store conversation_id in claim for reference
-        claim_service.update_claim(claim_id, transcription=transcription_text, status=ClaimStatus.PROCESSING)
+        # Store conversation_id in claim for reference and create mapping
+        claim_service.update_claim(claim_id, transcription=transcription_text, status=ClaimStatus.PROCESSING, conversation_id=conversation_id)
+        conversation_to_claim[conversation_id] = claim_id
         
         # Define log callback for agent
         def log_callback(message: str, log_type: str = "info"):
@@ -493,6 +594,31 @@ async def get_conversation_transcription(conversation_id: str):
         "transcription": transcription.transcription,
         "received_at": transcription.received_at.isoformat()
     }
+
+
+@app.get("/conversation/{conversation_id}/claim")
+async def get_claim_from_conversation(conversation_id: str):
+    """Get claim_id associated with a conversation_id"""
+    # Check mapping first
+    claim_id = conversation_to_claim.get(conversation_id)
+    
+    if claim_id:
+        return {
+            "conversation_id": conversation_id,
+            "claim_id": claim_id
+        }
+    
+    # If not in mapping, check all claims for this conversation_id
+    from app.services.claim_service import claims_store
+    for cid, claim in claims_store.items():
+        if hasattr(claim, 'conversation_id') and claim.conversation_id == conversation_id:
+            conversation_to_claim[conversation_id] = cid
+            return {
+                "conversation_id": conversation_id,
+                "claim_id": cid
+            }
+    
+    raise HTTPException(status_code=404, detail="No claim found for this conversation")
 
 
 @app.post("/webhook/elevenlabs/transcription/test")

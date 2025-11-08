@@ -50,6 +50,7 @@ class Claim(BaseModel):
     confirmation: Optional[str] = None
     status: ClaimStatus = ClaimStatus.PENDING
     transcription: Optional[str] = None
+    conversation_id: Optional[str] = None
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()
 

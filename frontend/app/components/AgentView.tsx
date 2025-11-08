@@ -17,6 +17,7 @@ export default function AgentView() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [transcriptions, setTranscriptions] = useState<TranscriptionMessage[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [sseConnectionStatus, setSseConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('disconnected');
   const wsRef = useRef<WebSocket | null>(null);
   const keepAliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptionsEndRef = useRef<HTMLDivElement | null>(null);
@@ -60,6 +61,21 @@ export default function AgentView() {
           console.log('AgentView: Found new conversationId in localStorage:', storedConversationId);
           setConversationId(storedConversationId);
           connectToWebSocket(storedConversationId);
+          
+          // Try to get claim_id from conversation_id
+          try {
+            const claimData = await api.getClaimFromConversation(storedConversationId);
+            if (claimData && claimData.claim_id) {
+              console.log('AgentView: Found claim_id from conversation:', claimData.claim_id);
+              setCurrentClaimId(claimData.claim_id);
+              localStorage.setItem('currentClaimId', claimData.claim_id);
+            }
+          } catch (error: any) {
+            // Claim might not be created yet - this is expected during active calls
+            if (error.response?.status !== 404) {
+              console.error('AgentView: Error fetching claim from conversation:', error);
+            }
+          }
         }
       } else {
         console.log('AgentView: No conversationId in localStorage, checking backend...');
@@ -70,6 +86,21 @@ export default function AgentView() {
             console.log('AgentView: Found latest conversation from backend:', latest.conversation_id);
             setConversationId(latest.conversation_id);
             localStorage.setItem('currentConversationId', latest.conversation_id);
+            
+            // Try to get claim_id from conversation_id
+            try {
+              const claimData = await api.getClaimFromConversation(latest.conversation_id);
+              if (claimData && claimData.claim_id) {
+                console.log('AgentView: Found claim_id from conversation:', claimData.claim_id);
+                setCurrentClaimId(claimData.claim_id);
+                localStorage.setItem('currentClaimId', claimData.claim_id);
+              }
+            } catch (error: any) {
+              // Claim might not be created yet
+              if (error.response?.status !== 404) {
+                console.error('AgentView: Error fetching claim from conversation:', error);
+              }
+            }
           }
         } catch (error: any) {
           // No conversation yet - this is expected
@@ -121,11 +152,11 @@ export default function AgentView() {
     };
 
     // Also poll localStorage in case storage event doesn't fire (same tab)
-    // Poll more frequently initially, then slow down
+    // Poll more frequently for active calls
     const interval = setInterval(() => {
       checkForClaim();
       checkForConversation();
-    }, 500); // Check every 500ms for faster detection
+    }, 1000); // Check every 1 second for active calls
 
     window.addEventListener('storage', handleStorageChange);
     return () => {
@@ -243,7 +274,7 @@ export default function AgentView() {
     }
   };
 
-  // Poll for post-call transcription from webhook
+  // Poll for transcription - more frequently during active calls
   useEffect(() => {
     if (!conversationId) {
       console.log('AgentView: No conversationId, skipping transcription polling');
@@ -259,7 +290,7 @@ export default function AgentView() {
         console.log('AgentView: Transcription data received:', transcriptionData);
         
         if (transcriptionData && transcriptionData.transcription) {
-          console.log('AgentView: Post-call transcription received, length:', transcriptionData.transcription.length);
+          console.log('AgentView: Transcription received, length:', transcriptionData.transcription.length);
           
           // Parse the transcription text (format: "Agent: message\nUser: message")
           const fullTranscription = transcriptionData.transcription;
@@ -313,11 +344,29 @@ export default function AgentView() {
             console.log('AgentView: Updating transcriptions, new count:', newTranscriptions.length);
             return newTranscriptions;
           });
+          
+          // Also try to get claim_id if we don't have it yet
+          if (!currentClaimId) {
+            try {
+              const claimData = await api.getClaimFromConversation(conversationId);
+              if (claimData && claimData.claim_id) {
+                console.log('AgentView: Found claim_id from conversation during transcription poll:', claimData.claim_id);
+                setCurrentClaimId(claimData.claim_id);
+                localStorage.setItem('currentClaimId', claimData.claim_id);
+              }
+            } catch (error: any) {
+              // Claim might not be created yet
+              if (error.response?.status !== 404) {
+                console.error('AgentView: Error fetching claim from conversation:', error);
+              }
+            }
+          }
         }
       } catch (error: any) {
         // Transcription not available yet - this is expected until webhook is received
         if (error.response?.status === 404) {
-          console.log('AgentView: Transcription not found yet (404), will keep polling...');
+          // During active calls, transcription might not be available yet
+          // This is normal, so we'll keep polling
         } else {
           console.error('AgentView: Error fetching transcription:', error);
           if (error.response) {
@@ -327,8 +376,9 @@ export default function AgentView() {
       }
     };
 
-    // Poll every 5 seconds for transcription (webhook might arrive after call ends)
-    const interval = setInterval(pollForTranscription, 5000);
+    // Poll more frequently during active calls (every 2 seconds)
+    // This helps catch transcription updates quickly for active/hanging calls
+    const interval = setInterval(pollForTranscription, 2000);
     
     // Also check immediately
     pollForTranscription();
@@ -337,7 +387,7 @@ export default function AgentView() {
       console.log('AgentView: Cleaning up transcription polling');
       clearInterval(interval);
     };
-  }, [conversationId]);
+  }, [conversationId, currentClaimId]);
 
   // Auto-scroll to bottom of transcriptions
   useEffect(() => {
@@ -348,38 +398,74 @@ export default function AgentView() {
 
   // SSE connection for real-time agent logs
   useEffect(() => {
-    if (!currentClaimId) return;
+    if (!currentClaimId) {
+      setSseConnectionStatus('disconnected');
+      setLogs([]);
+      return;
+    }
 
     console.log('AgentView: Setting up SSE connection for claim:', currentClaimId);
+    setSseConnectionStatus('connecting');
+    
+    // Close existing connection if any
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
     
     // Create EventSource for SSE
     const eventSource = new EventSource(`http://localhost:8000/claim/stream/${currentClaimId}`);
     
     eventSource.onopen = () => {
       console.log('AgentView: SSE connection opened');
+      setSseConnectionStatus('connected');
     };
     
     eventSource.onmessage = (event) => {
       try {
+        // Skip keepalive messages
+        if (event.data.trim() === '' || event.data.startsWith(':')) {
+          return;
+        }
+        
         const log: SystemLog = JSON.parse(event.data);
         console.log('AgentView: SSE log received:', log);
-        setLogs((prev) => [...prev, log]);
+        setLogs((prev) => {
+          // Avoid duplicates
+          const exists = prev.some(l => 
+            l.timestamp === log.timestamp && 
+            l.message === log.message
+          );
+          return exists ? prev : [...prev, log];
+        });
       } catch (error) {
-        console.error('AgentView: Error parsing SSE message:', error);
+        console.error('AgentView: Error parsing SSE message:', error, event.data);
       }
     };
     
     eventSource.onerror = (error) => {
       console.error('AgentView: SSE error:', error);
-      eventSource.close();
+      setSseConnectionStatus('error');
+      
+      // Try to reconnect after a delay
+      setTimeout(() => {
+        if (currentClaimId && eventSourceRef.current?.readyState === EventSource.CLOSED) {
+          console.log('AgentView: Attempting to reconnect SSE...');
+          setSseConnectionStatus('connecting');
+          // The useEffect will run again and create a new connection
+        }
+      }, 3000);
     };
     
     eventSourceRef.current = eventSource;
     
     return () => {
       console.log('AgentView: Closing SSE connection');
-      eventSource.close();
-      eventSourceRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      setSseConnectionStatus('disconnected');
     };
   }, [currentClaimId]);
 
@@ -471,7 +557,7 @@ export default function AgentView() {
           </div>
         </div>
         <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <SystemLogs claimId={currentClaimId} logs={logs} />
+          <SystemLogs claimId={currentClaimId} logs={logs} connectionStatus={sseConnectionStatus} />
         </div>
       </div>
     </div>

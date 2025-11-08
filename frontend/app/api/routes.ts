@@ -101,5 +101,10 @@ export const api = {
     const response = await axios.get(`${API_BASE_URL}/conversation/latest`);
     return response.data;
   },
+
+  async getClaimFromConversation(conversationId: string): Promise<{ conversation_id: string; claim_id: string }> {
+    const response = await axios.get(`${API_BASE_URL}/conversation/${conversationId}/claim`);
+    return response.data;
+  },
 };
 
