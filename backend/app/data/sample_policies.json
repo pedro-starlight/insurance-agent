@@ -1,0 +1,143 @@
+{
+  "policies": [
+    {
+      "policy_id": "POL-001",
+      "policyholder_name": "John Smith",
+      "policy_type": "Comprehensive",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Roadside assistance is covered for mechanical breakdowns, flat tires, dead battery, and lockouts."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related towing and repairs are covered under comprehensive policy."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "Engine failures are covered if vehicle is less than 10 years old."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered with on-site repair or tow to nearest garage."
+        }
+      ],
+      "exclusions": [
+        "Pre-existing mechanical issues not reported",
+        "Damage from racing or illegal activities",
+        "Vehicles over 15 years old without special coverage"
+      ],
+      "deductible": 100
+    },
+    {
+      "policy_id": "POL-002",
+      "policyholder_name": "Sarah Johnson",
+      "policy_type": "Standard",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Basic roadside assistance is covered for breakdowns."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related services are covered."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": false,
+          "description": "Engine failures are not covered under standard policy."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered."
+        }
+      ],
+      "exclusions": [
+        "Engine failures",
+        "Transmission issues",
+        "Vehicles over 12 years old"
+      ],
+      "deductible": 250
+    },
+    {
+      "policy_id": "POL-003",
+      "policyholder_name": "Michael Brown",
+      "policy_type": "Premium",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "All roadside assistance services are covered including premium concierge services."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Full accident coverage including rental car and taxi services."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "All mechanical failures are covered regardless of vehicle age."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Premium tire service with mobile repair unit."
+        },
+        {
+          "condition": "rental_car",
+          "covered": true,
+          "description": "Rental car coverage up to 7 days included."
+        }
+      ],
+      "exclusions": [],
+      "deductible": 0
+    }
+  ],
+  "garages": [
+    {
+      "id": "GAR-001",
+      "name": "Downtown Auto Repair",
+      "location": "123 Main St, Downtown",
+      "latitude": 40.7128,
+      "longitude": -74.0060,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-002",
+      "name": "Highway Service Center",
+      "location": "456 Highway Blvd, Midtown",
+      "latitude": 40.7589,
+      "longitude": -73.9851,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-003",
+      "name": "Express Mobile Repair",
+      "location": "789 Park Ave, Uptown",
+      "latitude": 40.7831,
+      "longitude": -73.9712,
+      "services": ["repair"],
+      "available": true
+    },
+    {
+      "id": "GAR-004",
+      "name": "24/7 Towing Services",
+      "location": "321 Broadway, Downtown",
+      "latitude": 40.7282,
+      "longitude": -74.0776,
+      "services": ["tow"],
+      "available": true
+    }
+  ]
+}
+
