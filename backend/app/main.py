@@ -370,6 +370,14 @@ async def receive_transcription_webhook(request: Request):
     """
     Receive post-call transcription webhook from ElevenLabs
     Triggers unified agent processing
+    
+    Implements best practices from ElevenLabs documentation:
+    https://elevenlabs.io/docs/agents-platform/workflows/post-call-webhooks#transcription-webhooks-post_call_transcription
+    
+    - HMAC signature verification with timestamp validation
+    - Uses 'original_message' for full transcription (not truncated 'message')
+    - Handles webhook type detection (post_call_transcription)
+    - Returns 200 status code for successful processing
     """
     # Log all incoming request details for debugging
     print("=" * 80)
@@ -398,7 +406,14 @@ async def receive_transcription_webhook(request: Request):
                     elif part.startswith("t="):
                         timestamp = part.split("=", 1)[1]
                 
-                if signature:
+                if signature and timestamp:
+                    # Validate timestamp (within 30 minutes tolerance as per docs)
+                    import time
+                    tolerance = int(time.time()) - 30 * 60
+                    if int(timestamp) < tolerance:
+                        print("ERROR: Webhook timestamp too old")
+                        raise HTTPException(status_code=401, detail="Webhook timestamp too old")
+                    
                     body_bytes = await request.body()
                     signed_payload = f"{timestamp}.{body_bytes.decode('utf-8')}"
                     
@@ -412,7 +427,7 @@ async def receive_transcription_webhook(request: Request):
                         print("ERROR: Webhook signature verification failed!")
                         raise HTTPException(status_code=401, detail="Invalid webhook signature")
                     
-                    print("✓ Webhook signature verified successfully")
+                    print("✓ Webhook signature and timestamp verified successfully")
                     body = json.loads(body_bytes.decode('utf-8'))
                 else:
                     body = await request.json()
@@ -420,6 +435,15 @@ async def receive_transcription_webhook(request: Request):
                 body = await request.json()
         else:
             body = await request.json()
+        
+        # Check webhook type as per ElevenLabs documentation
+        webhook_type = body.get("type")
+        print(f"📥 Webhook type: {webhook_type}")
+        
+        # We only handle post_call_transcription webhooks
+        if webhook_type != "post_call_transcription":
+            print(f"⚠️ Ignoring webhook type: {webhook_type}")
+            return {"status": "received", "message": f"Webhook type {webhook_type} not handled"}
         
         # Extract conversation_id and transcription
         data = body.get("data", {})
