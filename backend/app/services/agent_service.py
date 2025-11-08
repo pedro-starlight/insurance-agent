@@ -184,7 +184,10 @@ For missing information, use appropriate defaults:
                     messages=messages,
                     response_format={
                         "type": "json_schema",
-                        "json_schema": OUTPUT_SCHEMA
+                        "json_schema": {
+                            "name": "UnifiedAgentOutput",
+                            "schema": OUTPUT_SCHEMA
+                        }
                     },
                     temperature=0.1
                 )
