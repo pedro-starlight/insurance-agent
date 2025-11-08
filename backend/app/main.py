@@ -1,9 +1,13 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from app.models import AudioRequest, Claim, CoverageDecision, ActionRecommendation, Message, ClaimStatus, ConversationTranscription
-from app.services import claim_service, coverage_service, action_service, voice_service
+from fastapi.responses import StreamingResponse
+from app.models import AudioRequest, Claim, CoverageDecision, ActionRecommendation, Message, ClaimStatus, ConversationTranscription, UnifiedAgentOutput
+from app.services import claim_service, coverage_service, action_service
+from app.services.agent_service import process_claim_with_agent
 from typing import Dict, Optional
 from datetime import datetime
+from asyncio import Queue
+import asyncio
 import os
 import json
 import hmac
@@ -26,6 +30,12 @@ system_logs: Dict[str, list] = {}
 # Store for conversation transcriptions (conversation_id -> transcription)
 conversation_transcriptions: Dict[str, ConversationTranscription] = {}
 
+# Store for SSE log queues (claim_id -> Queue)
+log_queues: Dict[str, Queue] = {}
+
+# Store for agent outputs per claim (claim_id -> UnifiedAgentOutput)
+agent_outputs: Dict[str, UnifiedAgentOutput] = {}
+
 
 # Middleware to log all requests to webhook endpoint
 @app.middleware("http")
@@ -42,89 +52,63 @@ async def log_webhook_requests(request: Request, call_next):
 
 
 def add_log(claim_id: str, message: str, log_type: str = "info"):
-    """Add a log entry for observability"""
+    """Add a log entry and push to SSE stream if active"""
     if claim_id not in system_logs:
         system_logs[claim_id] = []
     
-    from datetime import datetime
     log_entry = {
         "timestamp": datetime.now().isoformat(),
         "type": log_type,
         "message": message
     }
     system_logs[claim_id].append(log_entry)
-
-
-@app.post("/claim/audio")
-async def create_claim_from_audio(audio_request: AudioRequest):
-    """
-    Create a claim from audio URL
-    Returns claim_id
-    """
-    try:
-        # Create new claim
-        claim_id = claim_service.create_claim()
-        add_log(claim_id, f"Claim created: {claim_id}", "info")
-        
-        # Process audio and get transcription
-        add_log(claim_id, "Processing audio transcription...", "info")
-        
-        # Download and transcribe audio from ElevenLabs conversation
-        if not audio_request.conversation_id:
-            raise HTTPException(status_code=400, detail="'conversation_id' is required")
-        
-        add_log(claim_id, f"Downloading audio from conversation: {audio_request.conversation_id}", "info")
-        transcription = await voice_service.download_and_transcribe_conversation(audio_request.conversation_id)
-        
-        if transcription:
-            # Update claim with transcription
-            claim_service.update_claim(claim_id, transcription=transcription)
-            add_log(claim_id, f"Transcription received: {transcription[:100]}...", "info")
-            
-            # Extract claim fields using OpenAI
-            add_log(claim_id, "Extracting claim fields using AI...", "info")
-            extracted_fields = await claim_service.extract_claim_fields(transcription)
-            
-            # Update claim with extracted fields (both new structured and legacy fields)
-            claim_service.update_claim(
-                claim_id,
-                # New structured fields
-                full_name=extracted_fields.full_name if extracted_fields.full_name != "unknown" else None,
-                car_model=extracted_fields.car_model,
-                location_data=extracted_fields.location,
-                assistance_type=extracted_fields.assistance_type if extracted_fields.assistance_type != "unknown" else None,
-                safety_status=extracted_fields.safety_status if extracted_fields.safety_status != "unknown" else None,
-                confirmation=extracted_fields.confirmation,
-                # Legacy fields for backward compatibility
-                policyholder_name=extracted_fields.full_name if extracted_fields.full_name != "unknown" else None,
-                car_info=f"{extracted_fields.car_model.year} {extracted_fields.car_model.make} {extracted_fields.car_model.model}".strip() if all(v != "unknown" for v in [extracted_fields.car_model.make, extracted_fields.car_model.model, extracted_fields.car_model.year]) else None,
-                location=extracted_fields.location.free_text,
-                damage_type=extracted_fields.assistance_type if extracted_fields.assistance_type != "unknown" else "breakdown",
-                situation=extracted_fields.location.free_text,
-                status=ClaimStatus.PROCESSING
-            )
-            add_log(claim_id, "Claim fields extracted successfully", "info")
-            
-            # Check coverage
-            add_log(claim_id, "Checking coverage against policy...", "info")
-            claim = claim_service.get_claim(claim_id)
-            if claim:
-                coverage = coverage_service.check_coverage(claim)
-                add_log(claim_id, f"Coverage decision: {'COVERED' if coverage.covered else 'NOT COVERED'}", "info")
-                
-                # Get action recommendation
-                add_log(claim_id, "Generating action recommendation...", "info")
-                action = action_service.recommend_action(claim, coverage)
-                add_log(claim_id, f"Action recommended: {action.action.value}", "info")
-                
-                # Generate message
-                message = generate_message(claim, coverage, action)
-                add_log(claim_id, "Message generated for policyholder", "info")
-        
-        return {"claim_id": claim_id}
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Push to SSE queue if exists
+    if claim_id in log_queues:
+        try:
+            log_queues[claim_id].put_nowait(log_entry)
+        except:
+            pass
+
+
+@app.get("/claim/stream/{claim_id}")
+async def stream_logs(claim_id: str):
+    """Stream agent execution logs via Server-Sent Events"""
+    
+    # Create queue for this claim if not exists
+    if claim_id not in log_queues:
+        log_queues[claim_id] = Queue()
+    
+    async def event_generator():
+        queue = log_queues[claim_id]
+        try:
+            # Send existing logs first
+            if claim_id in system_logs:
+                for log in system_logs[claim_id]:
+                    yield f"data: {json.dumps(log)}\n\n"
+            
+            # Then stream new logs
+            while True:
+                log = await queue.get()
+                if log is None:  # Sentinel to close stream
+                    break
+                yield f"data: {json.dumps(log)}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            # Cleanup
+            if claim_id in log_queues:
+                del log_queues[claim_id]
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 
 
@@ -233,26 +217,25 @@ async def get_logs(claim_id: str):
 
 @app.get("/claim/{claim_id}")
 async def get_claim(claim_id: str):
-    """Get full claim details"""
+    """Get full claim details from unified agent output"""
     claim = claim_service.get_claim(claim_id)
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
     
+    # Get agent output
+    agent_output = agent_outputs.get(claim_id)
+    
+    if not agent_output:
+        return {
+            "claim": claim.dict(),
+            "status": "processing",
+            "message": "Agent is still processing this claim"
+        }
+    
     return {
         "claim": claim.dict(),
-        "coverage": coverage_service.check_coverage(claim).dict(),
-        "action": action_service.recommend_action(
-            claim, 
-            coverage_service.check_coverage(claim)
-        ).dict(),
-        "message": generate_message(
-            claim,
-            coverage_service.check_coverage(claim),
-            action_service.recommend_action(
-                claim,
-                coverage_service.check_coverage(claim)
-            )
-        ).dict()
+        "agent_output": agent_output.dict(),
+        "status": "completed"
     }
 
 
@@ -282,11 +265,7 @@ async def verify_webhook():
 async def receive_transcription_webhook(request: Request):
     """
     Receive post-call transcription webhook from ElevenLabs
-    Expected payload structure based on ElevenLabs documentation:
-    {
-        "conversation_id": "string",
-        "transcription": "string" or structured transcription data
-    }
+    Triggers unified agent processing
     """
     # Log all incoming request details for debugging
     print("=" * 80)
@@ -302,12 +281,9 @@ async def receive_transcription_webhook(request: Request):
         body = None
         
         if webhook_secret:
-            # Get signature from headers (ElevenLabs uses 'elevenlabs-signature' header)
             signature_header = request.headers.get("elevenlabs-signature")
             
             if signature_header:
-                # Parse signature header format: "t=timestamp,v0=signature"
-                # Extract the v0 signature value
                 signature_parts = signature_header.split(",")
                 signature = None
                 timestamp = None
@@ -319,66 +295,39 @@ async def receive_transcription_webhook(request: Request):
                         timestamp = part.split("=", 1)[1]
                 
                 if signature:
-                    # Get raw body for signature verification
                     body_bytes = await request.body()
-                    
-                    # Create signed payload: timestamp + "." + body
                     signed_payload = f"{timestamp}.{body_bytes.decode('utf-8')}"
                     
-                    # Verify signature using HMAC SHA256
                     expected_signature = hmac.new(
                         webhook_secret.encode('utf-8'),
                         signed_payload.encode('utf-8'),
                         hashlib.sha256
                     ).hexdigest()
                     
-                    # Compare signatures securely
                     if not hmac.compare_digest(signature, expected_signature):
                         print("ERROR: Webhook signature verification failed!")
-                        print(f"Received signature: {signature}")
-                        print(f"Expected signature: {expected_signature}")
                         raise HTTPException(status_code=401, detail="Invalid webhook signature")
                     
                     print("✓ Webhook signature verified successfully")
-                    # Parse body after verification
                     body = json.loads(body_bytes.decode('utf-8'))
                 else:
-                    print("WARNING: Could not parse signature from header")
                     body = await request.json()
             else:
-                print("WARNING: Webhook secret configured but no signature header found")
-                print("Available headers:", list(request.headers.keys()))
-                # Still process the request but log the warning
                 body = await request.json()
         else:
-            # No secret configured, skip verification (for development)
-            print("INFO: No webhook secret configured, skipping signature verification")
             body = await request.json()
         
-        print(f"Received transcription webhook body type: {body.get('type')}")
-        
-        # Extract conversation_id from nested data structure
-        # ElevenLabs sends: { "type": "post_call_transcription", "data": { "conversation_id": "...", "transcript": [...] } }
+        # Extract conversation_id and transcription
         data = body.get("data", {})
-        conversation_id = data.get("conversation_id")
+        conversation_id = data.get("conversation_id") or body.get("conversation_id")
         
         if not conversation_id:
-            # Try top-level as fallback
-            conversation_id = body.get("conversation_id")
-        
-        if not conversation_id:
-            print(f"ERROR: No conversation_id found in payload. Body keys: {list(body.keys())}")
-            if data:
-                print(f"Data keys: {list(data.keys())}")
             raise HTTPException(status_code=400, detail="conversation_id is required in webhook payload")
         
         print(f"✓ Extracted conversation_id: {conversation_id}")
         
-        # Extract transcript from data.transcript array
-        transcript_array = data.get("transcript", [])
-        print(f"Found {len(transcript_array)} transcript entries")
-        
         # Build transcription text from transcript array
+        transcript_array = data.get("transcript", [])
         transcription_parts = []
         for entry in transcript_array:
             role = entry.get("role", "unknown")
@@ -388,31 +337,84 @@ async def receive_transcription_webhook(request: Request):
                 transcription_parts.append(f"{speaker_label}: {message}")
         
         transcription_text = "\n".join(transcription_parts) if transcription_parts else json.dumps(transcript_array)
-        
         print(f"Built transcription text ({len(transcription_text)} chars): {transcription_text[:100]}...")
         
-        # Store transcription
-        conversation_transcriptions[conversation_id] = ConversationTranscription(
+        # Store conversation transcription
+        conversation = ConversationTranscription(
             conversation_id=conversation_id,
             transcription=transcription_text,
             received_at=datetime.now()
         )
+        conversation_transcriptions[conversation_id] = conversation
         
-        add_log(conversation_id, f"Transcription received via webhook for conversation: {conversation_id}", "info")
+        # Save to JSON file
+        conversations_dir = os.path.join(os.path.dirname(__file__), 'data', 'conversations')
+        os.makedirs(conversations_dir, exist_ok=True)
         
-        print(f"✓ ✓ ✓ Stored transcription for conversation_id: {conversation_id} ✓ ✓ ✓")
-        print(f"Frontend can now fetch it at: GET /conversation/{conversation_id}/transcription")
+        conversation_file = os.path.join(conversations_dir, f"{conversation_id}.json")
+        try:
+            with open(conversation_file, 'w') as f:
+                json.dump({
+                    "conversation_id": conversation_id,
+                    "transcription": transcription_text,
+                    "received_at": conversation.received_at.isoformat(),
+                    "raw_transcript": transcript_array
+                }, f, indent=2)
+            print(f"✓ Saved conversation to file: {conversation_file}")
+        except Exception as e:
+            print(f"Warning: Failed to save conversation to file: {e}")
         
-        return {"status": "received", "conversation_id": conversation_id}
+        # Create or get claim for this conversation
+        claim_id = claim_service.create_claim()
+        add_log(claim_id, f"Claim created for conversation: {conversation_id}", "info")
+        
+        # Store conversation_id in claim for reference
+        claim_service.update_claim(claim_id, transcription=transcription_text, status=ClaimStatus.PROCESSING)
+        
+        # Define log callback for agent
+        def log_callback(message: str, log_type: str = "info"):
+            add_log(claim_id, message, log_type)
+        
+        # Process claim with unified agent
+        add_log(claim_id, "Starting unified agent processing...", "info")
+        try:
+            agent_output = await process_claim_with_agent(
+                transcription=transcription_text,
+                claim_id=claim_id,
+                log_callback=log_callback
+            )
+            
+            # Store agent output
+            agent_outputs[claim_id] = agent_output
+            
+            # Update claim with agent results
+            claim_service.update_claim(
+                claim_id,
+                full_name=agent_output.full_name,
+                status=ClaimStatus.PROCESSING
+            )
+            
+            add_log(claim_id, "✅ Agent processing completed successfully", "success")
+            
+            # Send sentinel to close SSE stream
+            if claim_id in log_queues:
+                try:
+                    await log_queues[claim_id].put(None)
+                except:
+                    pass
+            
+            print(f"✓ ✓ ✓ Claim {claim_id} processed successfully ✓ ✓ ✓")
+            
+        except Exception as e:
+            add_log(claim_id, f"❌ Agent processing failed: {str(e)}", "error")
+            print(f"Error processing claim with agent: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return {"status": "received", "conversation_id": conversation_id, "claim_id": claim_id}
     
     except json.JSONDecodeError as e:
         print(f"JSON decode error: {e}")
-        # Try to get raw body for debugging
-        try:
-            body_bytes = await request.body()
-            print(f"Raw body: {body_bytes.decode('utf-8', errors='ignore')}")
-        except:
-            pass
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
     except Exception as e:
         import traceback
@@ -424,24 +426,62 @@ async def receive_transcription_webhook(request: Request):
 @app.get("/conversation/latest")
 async def get_latest_conversation():
     """Get the most recent conversation that has a transcription"""
-    if not conversation_transcriptions:
-        raise HTTPException(status_code=404, detail="No conversations found")
+    # Check in-memory storage first
+    if conversation_transcriptions:
+        latest = max(conversation_transcriptions.values(), key=lambda x: x.received_at)
+        return {
+            "conversation_id": latest.conversation_id,
+            "transcription": latest.transcription,
+            "received_at": latest.received_at.isoformat()
+        }
     
-    # Get the most recent conversation (sorted by received_at)
-    latest = max(conversation_transcriptions.values(), key=lambda x: x.received_at)
+    # If nothing in memory, check file system
+    conversations_dir = os.path.join(os.path.dirname(__file__), 'data', 'conversations')
+    if os.path.exists(conversations_dir):
+        files = [f for f in os.listdir(conversations_dir) if f.endswith('.json')]
+        if files:
+            # Get the most recent file by modification time
+            latest_file = max(
+                [os.path.join(conversations_dir, f) for f in files],
+                key=os.path.getmtime
+            )
+            try:
+                with open(latest_file, 'r') as f:
+                    data = json.load(f)
+                    return {
+                        "conversation_id": data["conversation_id"],
+                        "transcription": data["transcription"],
+                        "received_at": data["received_at"]
+                    }
+            except Exception as e:
+                print(f"Error loading latest conversation from file: {e}")
     
-    return {
-        "conversation_id": latest.conversation_id,
-        "transcription": latest.transcription,
-        "received_at": latest.received_at.isoformat()
-    }
+    raise HTTPException(status_code=404, detail="No conversations found")
 
 
 @app.get("/conversation/{conversation_id}/transcription")
 async def get_conversation_transcription(conversation_id: str):
-    """Get transcription for a conversation"""
+    """Get transcription for a conversation (from memory or file)"""
+    # First check in-memory storage
     transcription = conversation_transcriptions.get(conversation_id)
+    
+    # If not in memory, try loading from file
     if not transcription:
+        conversations_dir = os.path.join(os.path.dirname(__file__), 'data', 'conversations')
+        conversation_file = os.path.join(conversations_dir, f"{conversation_id}.json")
+        
+        if os.path.exists(conversation_file):
+            try:
+                with open(conversation_file, 'r') as f:
+                    data = json.load(f)
+                    return {
+                        "conversation_id": data["conversation_id"],
+                        "transcription": data["transcription"],
+                        "received_at": data["received_at"]
+                    }
+            except Exception as e:
+                print(f"Error loading conversation from file: {e}")
+        
         raise HTTPException(status_code=404, detail="Transcription not found")
     
     return {

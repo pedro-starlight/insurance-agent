@@ -1,42 +1,27 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { api, SystemLog } from '../api/routes';
+import { useEffect, useRef } from 'react';
+
+export interface SystemLog {
+  timestamp: string;
+  type: string;
+  message: string;
+}
 
 interface SystemLogsProps {
   claimId: string | null;
+  logs: SystemLog[];
 }
 
-export default function SystemLogs({ claimId }: SystemLogsProps) {
-  const [logs, setLogs] = useState<SystemLog[]>([]);
-  const logsEndRef = useRef<HTMLDivElement>(null);
+export default function SystemLogs({ claimId, logs }: SystemLogsProps) {
+  const logsEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
-    if (claimId) {
-      fetchLogs();
-      // Poll for new logs
-      const interval = setInterval(fetchLogs, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setLogs([]);
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [claimId]);
-
-  useEffect(() => {
-    // Auto-scroll to bottom
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
-
-  const fetchLogs = async () => {
-    if (!claimId) return;
-
-    try {
-      const response = await api.getLogs(claimId);
-      setLogs(response.logs);
-    } catch (error) {
-      console.error('Error fetching logs:', error);
-    }
-  };
 
   const getLogColor = (type: string) => {
     switch (type) {
@@ -55,31 +40,26 @@ export default function SystemLogs({ claimId }: SystemLogsProps) {
 
   if (!claimId) {
     return (
-      <div
-        style={{
-          padding: '20px',
-          border: '2px dashed #ccc',
-          borderRadius: '8px',
-          textAlign: 'center',
-          color: '#999',
-          height: '100%',
-        }}
-      >
-        No logs available. Waiting for claim...
+      <div style={{ padding: '20px' }}>
+        <h2 style={{ marginBottom: '15px', color: '#333' }}>Agent Execution Logs</h2>
+        <div
+          style={{
+            padding: '20px',
+            border: '2px dashed #ccc',
+            borderRadius: '8px',
+            textAlign: 'center',
+            color: '#999',
+          }}
+        >
+          No active claim. Logs will appear here when processing starts.
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        padding: '20px',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <h2 style={{ marginBottom: '15px', color: '#333' }}>System Logs</h2>
+    <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <h2 style={{ marginBottom: '15px', color: '#333' }}>Agent Execution Logs</h2>
       <div
         style={{
           flex: 1,
@@ -89,33 +69,42 @@ export default function SystemLogs({ claimId }: SystemLogsProps) {
           padding: '15px',
           fontFamily: 'monospace',
           fontSize: '12px',
-          maxHeight: '600px',
         }}
       >
-        {logs.length === 0 ? (
-          <div style={{ color: '#999' }}>No logs yet...</div>
-        ) : (
-          logs.map((log, index) => (
-            <div
-              key={index}
-              style={{
-                marginBottom: '10px',
-                padding: '8px',
-                backgroundColor: '#2d2d2d',
-                borderRadius: '4px',
-                borderLeft: `3px solid ${getLogColor(log.type)}`,
-              }}
-            >
-              <div style={{ color: '#999', fontSize: '10px', marginBottom: '4px' }}>
-                {new Date(log.timestamp).toLocaleTimeString()}
+        {logs.length > 0 ? (
+          <>
+            {logs.map((log, index) => (
+              <div
+                key={index}
+                style={{
+                  marginBottom: '8px',
+                  padding: '8px',
+                  borderLeft: `3px solid ${getLogColor(log.type)}`,
+                  backgroundColor: '#2d2d2d',
+                  borderRadius: '4px',
+                }}
+              >
+                <div style={{ color: '#7f8c8d', fontSize: '10px', marginBottom: '4px' }}>
+                  {new Date(log.timestamp).toLocaleTimeString()}
+                </div>
+                <div
+                  style={{
+                    color: log.type === 'error' ? '#e74c3c' : log.type === 'success' ? '#2ecc71' : '#ecf0f1',
+                  }}
+                >
+                  {log.message}
+                </div>
               </div>
-              <div style={{ color: '#fff' }}>{log.message}</div>
-            </div>
-          ))
+            ))}
+            <div ref={logsEndRef} />
+          </>
+        ) : (
+          <div style={{ color: '#7f8c8d', textAlign: 'center', padding: '20px' }}>
+            <div style={{ marginBottom: '8px' }}>🔄 Waiting for agent to start processing...</div>
+            <div style={{ fontSize: '10px' }}>Logs will stream in real-time via SSE</div>
+          </div>
         )}
-        <div ref={logsEndRef} />
       </div>
     </div>
   );
 }
-

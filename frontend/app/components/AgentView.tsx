@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import ClaimInterface from './ClaimInterface';
-import SystemLogs from './SystemLogs';
+import SystemLogs, { SystemLog } from './SystemLogs';
 import { api } from '../api/routes';
 
 interface TranscriptionMessage {
@@ -16,9 +16,11 @@ export default function AgentView() {
   const [currentClaimId, setCurrentClaimId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [transcriptions, setTranscriptions] = useState<TranscriptionMessage[]>([]);
+  const [logs, setLogs] = useState<SystemLog[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const keepAliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const transcriptionsEndRef = useRef<HTMLDivElement | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     // Poll for new claims (in production, use WebSocket)
@@ -93,6 +95,11 @@ export default function AgentView() {
           setConversationId(e.newValue);
           connectToWebSocket(e.newValue);
         }
+      } else if (e.key === 'clearConversation') {
+        // Clear conversation when new call starts
+        console.log('AgentView: Clearing conversation for new call');
+        setConversationId(null);
+        setTranscriptions([]);
       } else if (e.key === 'latestTranscription') {
         // Handle real-time transcription updates from PolicyholderView
         if (e.newValue) {
@@ -339,6 +346,43 @@ export default function AgentView() {
     }
   }, [transcriptions]);
 
+  // SSE connection for real-time agent logs
+  useEffect(() => {
+    if (!currentClaimId) return;
+
+    console.log('AgentView: Setting up SSE connection for claim:', currentClaimId);
+    
+    // Create EventSource for SSE
+    const eventSource = new EventSource(`http://localhost:8000/claim/stream/${currentClaimId}`);
+    
+    eventSource.onopen = () => {
+      console.log('AgentView: SSE connection opened');
+    };
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const log: SystemLog = JSON.parse(event.data);
+        console.log('AgentView: SSE log received:', log);
+        setLogs((prev) => [...prev, log]);
+      } catch (error) {
+        console.error('AgentView: Error parsing SSE message:', error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('AgentView: SSE error:', error);
+      eventSource.close();
+    };
+    
+    eventSourceRef.current = eventSource;
+    
+    return () => {
+      console.log('AgentView: Closing SSE connection');
+      eventSource.close();
+      eventSourceRef.current = null;
+    };
+  }, [currentClaimId]);
+
   // Cleanup WebSocket on unmount
   useEffect(() => {
     return () => {
@@ -349,15 +393,19 @@ export default function AgentView() {
         wsRef.current.close();
         wsRef.current = null;
       }
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
     };
   }, []);
 
   return (
     <div style={{ padding: '20px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <h1 style={{ marginBottom: '20px', color: '#333' }}>Insurance Agent View</h1>
-      {conversationId && (
+      {currentClaimId && (
         <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '4px', fontSize: '12px', color: '#1976d2' }}>
-          📞 Active Conversation ID: {conversationId} | Transcriptions: {transcriptions.length}
+          📋 Active Claim ID: {currentClaimId} | Logs: {logs.length} | Transcriptions: {transcriptions.length}
         </div>
       )}
       <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0 }}>
@@ -366,7 +414,7 @@ export default function AgentView() {
             <ClaimInterface claimId={currentClaimId} onClaimApproved={handleClaimApproved} />
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '20px', borderTop: '1px solid #eee' }}>
-            <h2 style={{ marginBottom: '15px', color: '#333', fontSize: '18px' }}>Real-Time Conversation</h2>
+            <h2 style={{ marginBottom: '15px', color: '#333', fontSize: '18px' }}>Call Transcription</h2>
             <div style={{ 
               backgroundColor: '#f9f9f9', 
               borderRadius: '4px', 
@@ -423,7 +471,7 @@ export default function AgentView() {
           </div>
         </div>
         <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <SystemLogs claimId={currentClaimId} />
+          <SystemLogs claimId={currentClaimId} logs={logs} />
         </div>
       </div>
     </div>

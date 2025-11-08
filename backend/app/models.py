@@ -94,3 +94,38 @@ class ConversationTranscription(BaseModel):
     transcription: str
     received_at: datetime = datetime.now()
 
+
+class PolicyholderMessage(BaseModel):
+    assessment: str
+    next_actions: str
+
+
+class UnifiedAgentOutput(BaseModel):
+    """Output from unified agent processing"""
+    # Extracted claim fields
+    full_name: str
+    car_make: str
+    car_model: str
+    car_year: str
+    location: str
+    city: str
+    assistance_type: str
+    safety_status: str
+    
+    # Coverage decision
+    coverage_covered: bool
+    coverage_reasoning: str
+    coverage_policy_section: Optional[str] = None
+    coverage_confidence: float = 0.0
+    
+    # Action recommendation
+    action_type: str
+    action_garage_name: Optional[str] = None
+    action_garage_location: Optional[str] = None
+    action_reasoning: str
+    action_estimated_time: Optional[str] = None
+    
+    # Policyholder message
+    message_assessment: str
+    message_next_actions: str
+

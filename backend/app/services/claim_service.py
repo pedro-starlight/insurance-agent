@@ -43,25 +43,6 @@ def update_claim(claim_id: str, **kwargs) -> Optional[Claim]:
     return claim
 
 
-async def extract_claim_fields(transcription: str) -> ExtractedClaimFields:
-    """
-    Extract claim fields from transcription using OpenAI with structured outputs
-    Returns the full ExtractedClaimFields object with all extracted information
-    """
-    from openai import OpenAI
-    from app.models import ExtractedClaimFields
-    
-    api_key = os.getenv("OPENAI_API_KEY")
-    client = OpenAI(api_key=api_key)
-    
-    response = client.responses.parse(
-        model="gpt-5-mini-2025-08-07",
-        input=[
-            {"role": "system", "content": "Extract structured information from insurance claim conversations. Extract the policyholder's name, car details, location, assistance type, safety status, and confirmation status."},
-            {"role": "user", "content": f"Transcription: {transcription}"}
-        ],
-        text_format=ExtractedClaimFields,
-    )
-    
-    return response.output_parsed
+# Note: extract_claim_fields moved to unified agent service
+# Claim extraction is now part of the unified agent processing
 

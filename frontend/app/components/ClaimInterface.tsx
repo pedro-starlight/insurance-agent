@@ -70,13 +70,15 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
   if (!claimDetails || !actionDetails) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
-        Loading claim details...
+        <div style={{ marginBottom: '15px', color: '#666' }}>Loading claim details...</div>
+        <div style={{ fontSize: '12px', color: '#999' }}>Waiting for agent to process claim...</div>
       </div>
     );
   }
 
   const coverage = claimDetails.coverage_decision;
   const action = actionDetails.action;
+  const claim = claimDetails.claim_details;
 
   return (
     <div style={{ padding: '20px' }}>
@@ -84,16 +86,31 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
 
       <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
         <h3 style={{ marginBottom: '10px', fontSize: '14px', color: '#666' }}>Policyholder</h3>
-        <p style={{ fontWeight: 'bold' }}>{claimDetails.claim_details?.policyholder_name || 'N/A'}</p>
+        <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>{claim?.full_name || 'N/A'}</p>
 
         <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Vehicle</h3>
-        <p>{claimDetails.claim_details?.car_info || 'N/A'}</p>
+        {claim?.car_make && claim?.car_model && claim?.car_year ? (
+          <p>{claim.car_year} {claim.car_make} {claim.car_model}</p>
+        ) : (
+          <p>N/A</p>
+        )}
 
         <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Location</h3>
-        <p>{claimDetails.claim_details?.location || 'N/A'}</p>
+        <p>{claim?.location || 'N/A'}</p>
+        {claim?.city && (
+          <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>City: {claim.city}</p>
+        )}
 
-        <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Damage Type</h3>
-        <p>{claimDetails.claim_details?.damage_type || 'N/A'}</p>
+        <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Assistance Type</h3>
+        <p style={{ textTransform: 'capitalize' }}>{claim?.assistance_type?.replace('_', ' ') || 'N/A'}</p>
+
+        <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Safety Status</h3>
+        <p style={{ 
+          textTransform: 'capitalize',
+          color: claim?.safety_status === 'safe' ? '#2ecc71' : claim?.safety_status === 'unsafe' ? '#e74c3c' : '#666'
+        }}>
+          {claim?.safety_status || 'unknown'}
+        </p>
       </div>
 
       <div
