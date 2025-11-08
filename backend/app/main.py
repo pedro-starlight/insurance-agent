@@ -435,13 +435,17 @@ async def receive_transcription_webhook(request: Request):
         transcription_parts = []
         for entry in transcript_array:
             role = entry.get("role", "unknown")
-            message = entry.get("message", "")
+            # Use original_message (full) instead of message (truncated)
+            message = entry.get("original_message") or entry.get("message", "")
             if message:
                 speaker_label = "Agent" if role == "agent" else "User"
                 transcription_parts.append(f"{speaker_label}: {message}")
         
         transcription_text = "\n".join(transcription_parts) if transcription_parts else json.dumps(transcript_array)
         print(f"Built transcription text ({len(transcription_text)} chars): {transcription_text[:100]}...")
+        print(f"⚠️ Webhook received {len(transcript_array)} transcript entries")
+        if len(transcript_array) < 3:
+            print(f"⚠️ WARNING: Incomplete transcript - expected multiple entries for a full conversation")
         
         # Store conversation transcription
         conversation = ConversationTranscription(
