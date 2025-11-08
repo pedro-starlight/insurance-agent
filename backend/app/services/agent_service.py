@@ -5,11 +5,46 @@ Processes insurance claims end-to-end using tools for dynamic data retrieval
 
 import json
 import os
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable
 from openai import OpenAI
 from app.models import UnifiedAgentOutput
 from app.services.coverage_service import get_policy_coverage
 from app.services.action_service import get_garages
+
+
+# JSON Schema for structured output (matches UnifiedAgentOutput)
+OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "full_name": {"type": "string"},
+        "car_make": {"type": "string"},
+        "car_model": {"type": "string"},
+        "car_year": {"type": "string"},
+        "location": {"type": "string"},
+        "city": {"type": "string"},
+        "assistance_type": {"type": "string"},
+        "safety_status": {"type": "string"},
+        "coverage_covered": {"type": "boolean"},
+        "coverage_reasoning": {"type": "string"},
+        "coverage_policy_section": {"type": ["string", "null"]},
+        "coverage_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "action_type": {"type": "string"},
+        "action_garage_name": {"type": ["string", "null"]},
+        "action_garage_location": {"type": ["string", "null"]},
+        "action_reasoning": {"type": "string"},
+        "action_estimated_time": {"type": ["string", "null"]},
+        "message_assessment": {"type": "string"},
+        "message_next_actions": {"type": "string"}
+    },
+    "required": [
+        "full_name", "car_make", "car_model", "car_year",
+        "location", "city", "assistance_type", "safety_status",
+        "coverage_covered", "coverage_reasoning",
+        "action_type", "action_reasoning",
+        "message_assessment", "message_next_actions"
+    ],
+    "additionalProperties": False
+}
 
 
 # Tool definitions for OpenAI function calling
@@ -115,28 +150,13 @@ async def process_claim_with_agent(
    - Garage details if applicable
    - Estimated time
 
-Return your final analysis as a JSON object with these exact fields:
-{
-  "full_name": "string",
-  "car_make": "string",
-  "car_model": "string",
-  "car_year": "string",
-  "location": "string (full address)",
-  "city": "string",
-  "assistance_type": "string",
-  "safety_status": "string",
-  "coverage_covered": boolean,
-  "coverage_reasoning": "string",
-  "coverage_policy_section": "string or null",
-  "coverage_confidence": float (0-1),
-  "action_type": "string (repair/tow/dispatch_taxi/rental_car)",
-  "action_garage_name": "string or null",
-  "action_garage_location": "string or null",
-  "action_reasoning": "string",
-  "action_estimated_time": "string",
-  "message_assessment": "string",
-  "message_next_actions": "string"
-}"""
+IMPORTANT: Always return valid data matching the required schema, even if the transcription is incomplete or missing information. 
+For missing information, use appropriate defaults:
+- Use "unknown" for assistance_type and safety_status if not found
+- Use empty string "" for missing text fields
+- Use false for coverage_covered if policy cannot be determined
+- Use 0.0 for coverage_confidence if information is insufficient
+- Use "dispatch_taxi" for action_type if no clear action can be determined"""
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -148,24 +168,42 @@ Return your final analysis as a JSON object with these exact fields:
         # Multi-turn conversation with function calling
         iteration = 0
         max_iterations = 10  # Safety limit
+        tools_used = False  # Track if we've used tools
         
         while iteration < max_iterations:
             iteration += 1
             log(f"Agent iteration {iteration}", "info")
             
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
-                temperature=0.1
-            )
+            # Determine if we should use structured outputs
+            # Use structured outputs after tool calls complete, or if no tools are needed
+            if tools_used:
+                # Use structured outputs to guarantee JSON format matching schema
+                log("Using structured outputs for final response", "info")
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": OUTPUT_SCHEMA
+                    },
+                    temperature=0.1
+                )
+            else:
+                # Allow tool calls on first iteration
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    tools=TOOLS,
+                    tool_choice="auto",
+                    temperature=0.1
+                )
             
             message = response.choices[0].message
             messages.append(message)  # Add assistant's response to conversation
             
             # Check if agent wants to call a function
             if message.tool_calls:
+                tools_used = True  # Mark that we've used tools
                 log(f"Agent requesting {len(message.tool_calls)} tool call(s)", "info")
                 
                 # Execute function calls
@@ -196,33 +234,27 @@ Return your final analysis as a JSON object with these exact fields:
                         "content": json.dumps(result) if result else "null"
                     })
                 
-                # Continue conversation
+                # Continue conversation - next iteration will use structured outputs
                 continue
             
+            # Agent finished without tool calls - use structured outputs for final response
+            if message.content and not tools_used:
+                # First response without tools - retry with structured outputs
+                log("Agent returned response without tools, retrying with structured outputs", "info")
+                tools_used = True
+                messages.pop()  # Remove the non-structured response
+                iteration -= 1  # Don't count this iteration
+                continue  # Retry with structured outputs
+            
             # Agent finished - parse final response
+            # With structured outputs, the response is guaranteed to be valid JSON
             if message.content:
                 log("Agent completed processing, parsing final output", "info")
-                
                 try:
+                    # Parse JSON (structured outputs guarantee valid JSON)
                     final_output = json.loads(message.content)
-                    
-                    # Validate required fields
-                    required_fields = [
-                        "full_name", "car_make", "car_model", "car_year",
-                        "location", "city", "assistance_type", "safety_status",
-                        "coverage_covered", "coverage_reasoning",
-                        "action_type", "action_reasoning",
-                        "message_assessment", "message_next_actions"
-                    ]
-                    
-                    missing_fields = [f for f in required_fields if f not in final_output]
-                    if missing_fields:
-                        log(f"Missing required fields: {missing_fields}", "error")
-                        raise ValueError(f"Agent output missing required fields: {missing_fields}")
-                    
                     log("Successfully parsed agent output", "success")
                     return UnifiedAgentOutput(**final_output)
-                    
                 except json.JSONDecodeError as e:
                     log(f"Failed to parse agent output as JSON: {e}", "error")
                     log(f"Raw output: {message.content[:500]}", "error")
