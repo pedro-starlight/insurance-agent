@@ -80,37 +80,74 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
   const action = actionDetails.action;
   const claim = claimDetails.claim_details;
 
+  const carModel = claim?.car_model || claim?.carModel;
+  const carMake = carModel?.make || claim?.car_make;
+  const carModelName = carModel?.model || claim?.car_model;
+  const carYear = carModel?.year || claim?.car_year;
+  const locationText =
+    claim?.location_data?.free_text ||
+    claim?.locationData?.free_text ||
+    claim?.location ||
+    claim?.location_text;
+  const city =
+    claim?.location_data?.components?.city ||
+    claim?.locationData?.components?.city ||
+    claim?.city;
+  const assistanceType = claim?.assistance_type || claim?.assistanceType;
+  const safetyStatus = claim?.safety_status || claim?.safetyStatus;
+
   return (
     <div style={{ padding: '20px' }}>
       <h2 style={{ marginBottom: '20px', color: '#333' }}>Claim Details</h2>
 
       <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
-        <h3 style={{ marginBottom: '10px', fontSize: '14px', color: '#666' }}>Policyholder</h3>
-        <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>{claim?.full_name || 'N/A'}</p>
-
-        <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Vehicle</h3>
-        {claim?.car_make && claim?.car_model && claim?.car_year ? (
-          <p>{claim.car_year} {claim.car_make} {claim.car_model}</p>
-        ) : (
-          <p>N/A</p>
-        )}
-
-        <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Location</h3>
-        <p>{claim?.location || 'N/A'}</p>
-        {claim?.city && (
-          <p style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>City: {claim.city}</p>
-        )}
-
-        <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Assistance Type</h3>
-        <p style={{ textTransform: 'capitalize' }}>{claim?.assistance_type?.replace('_', ' ') || 'N/A'}</p>
-
-        <h3 style={{ marginTop: '15px', marginBottom: '10px', fontSize: '14px', color: '#666' }}>Safety Status</h3>
-        <p style={{ 
-          textTransform: 'capitalize',
-          color: claim?.safety_status === 'safe' ? '#2ecc71' : claim?.safety_status === 'unsafe' ? '#e74c3c' : '#666'
-        }}>
-          {claim?.safety_status || 'unknown'}
-        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Full Name</h3>
+            <p style={{ fontWeight: 'bold', margin: 0 }}>{claim?.full_name || 'N/A'}</p>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Car Make</h3>
+            <p style={{ margin: 0 }}>{carMake || 'N/A'}</p>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Car Model</h3>
+            <p style={{ margin: 0 }}>{carModelName || 'N/A'}</p>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Car Year</h3>
+            <p style={{ margin: 0 }}>{carYear || 'N/A'}</p>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Location</h3>
+            <p style={{ margin: 0 }}>{locationText || 'N/A'}</p>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>City</h3>
+            <p style={{ margin: 0 }}>{city || 'N/A'}</p>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Assistance Type</h3>
+            <p style={{ margin: 0, textTransform: 'capitalize' }}>{assistanceType ? assistanceType.replace(/_/g, ' ') : 'N/A'}</p>
+          </div>
+          <div>
+            <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Safety Status</h3>
+            <p
+              style={{
+                margin: 0,
+                textTransform: 'capitalize',
+                color:
+                  safetyStatus === 'safe'
+                    ? '#2ecc71'
+                    : safetyStatus === 'unsafe'
+                    ? '#e74c3c'
+                    : '#666',
+              }}
+            >
+              {safetyStatus || 'unknown'}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div
