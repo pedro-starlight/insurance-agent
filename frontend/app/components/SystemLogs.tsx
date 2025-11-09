@@ -42,7 +42,7 @@ export default function SystemLogs({ claimId, logs, connectionStatus = 'disconne
   if (!claimId) {
     return (
       <div style={{ padding: '20px' }}>
-        <h2 style={{ marginBottom: '15px', color: '#333' }}>Agent Execution Logs</h2>
+        <h2 style={{ marginBottom: '15px', color: '#333', fontSize: '18px' }}>Agent Execution Logs</h2>
         <div
           style={{
             padding: '20px',
@@ -87,7 +87,7 @@ export default function SystemLogs({ claimId, logs, connectionStatus = 'disconne
   return (
     <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-        <h2 style={{ margin: 0, color: '#333' }}>Agent Execution Logs</h2>
+        <h2 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Agent Execution Logs</h2>
         {claimId && (
           <div style={{ 
             fontSize: '11px', 

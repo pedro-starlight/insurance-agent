@@ -18,8 +18,7 @@ export default function AgentView() {
   const [transcriptions, setTranscriptions] = useState<TranscriptionMessage[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [sseConnectionStatus, setSseConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('disconnected');
-  const wsRef = useRef<WebSocket | null>(null);
-  const keepAliveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // wsRef and keepAliveIntervalRef removed - no longer using WebSocket for transcription
   const transcriptionsEndRef = useRef<HTMLDivElement | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -60,7 +59,7 @@ export default function AgentView() {
         if (storedConversationId !== conversationId) {
           console.log('AgentView: Found new conversationId in localStorage:', storedConversationId);
           setConversationId(storedConversationId);
-          connectToWebSocket(storedConversationId);
+          // WebSocket connection removed - we now use post-call webhook transcription
           
           // Try to get claim_id from conversation_id
           try {
@@ -124,7 +123,7 @@ export default function AgentView() {
         console.log('AgentView: Storage event - conversationId changed to:', e.newValue);
         if (e.newValue) {
           setConversationId(e.newValue);
-          connectToWebSocket(e.newValue);
+          // WebSocket connection removed - we now use post-call webhook transcription
         }
       } else if (e.key === 'clearConversation') {
         // Clear conversation when new call starts
@@ -135,23 +134,6 @@ export default function AgentView() {
         setLogs([]);
         localStorage.removeItem('currentClaimId');
         localStorage.removeItem('currentConversationId');
-      } else if (e.key === 'latestTranscription') {
-        // Handle real-time transcription updates from PolicyholderView
-        if (e.newValue) {
-          try {
-            const transcript: TranscriptionMessage = JSON.parse(e.newValue);
-            setTranscriptions((prev) => {
-              // Avoid duplicates
-              const exists = prev.some(t => 
-                t.text === transcript.text && 
-                t.timestamp === transcript.timestamp
-              );
-              return exists ? prev : [...prev, transcript];
-            });
-          } catch (error) {
-            console.error('Error parsing transcription:', error);
-          }
-        }
       }
     };
 
@@ -170,113 +152,9 @@ export default function AgentView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentClaimId, conversationId]);
 
-  // Connect to ElevenLabs WebSocket to receive transcription events
-  const connectToWebSocket = (convId: string) => {
-    // Don't reconnect if already connected
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      return;
-    }
-
-    const agentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID || '';
-    const apiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || '';
-
-    if (!agentId || !apiKey || !convId) {
-      return;
-    }
-
-    try {
-      // Connect to the same conversation using conversation_id
-      const wsUrl = `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${agentId}&conversation_id=${convId}`;
-      const ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        console.log('AgentView: Connected to ElevenLabs WebSocket');
-        // Send authentication
-        ws.send(JSON.stringify({
-          type: 'authentication',
-          api_key: apiKey,
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('AgentView: WebSocket message received:', data.type, data);
-          
-          // Handle transcription events
-          if (data.type === 'user_transcript' || data.type === 'user_transcription_event') {
-            console.log('AgentView: User transcript received:', data);
-            const transcriptText = data.text || data.transcript || data.user_transcript || 
-                                 (data.user_transcription_event?.user_transcript) || '';
-            
-            if (transcriptText) {
-              const transcript: TranscriptionMessage = {
-                type: 'transcription',
-                speaker: 'user',
-                text: transcriptText,
-                timestamp: new Date().toISOString(),
-              };
-              console.log('AgentView: Adding user transcript:', transcript);
-              setTranscriptions((prev) => {
-                const exists = prev.some(t => 
-                  t.text === transcript.text && 
-                  t.timestamp === transcript.timestamp
-                );
-                return exists ? prev : [...prev, transcript];
-              });
-            }
-          } else if (data.type === 'agent_transcript' || data.type === 'assistant_transcript' || 
-                     data.type === 'agent_transcription_event') {
-            console.log('AgentView: Agent transcript received:', data);
-            const transcriptText = data.text || data.transcript || data.agent_transcript || 
-                                 (data.agent_transcription_event?.agent_transcript) || '';
-            
-            if (transcriptText) {
-              const transcript: TranscriptionMessage = {
-                type: 'transcription',
-                speaker: 'agent',
-                text: transcriptText,
-                timestamp: new Date().toISOString(),
-              };
-              console.log('AgentView: Adding agent transcript:', transcript);
-              setTranscriptions((prev) => {
-                const exists = prev.some(t => 
-                  t.text === transcript.text && 
-                  t.timestamp === transcript.timestamp
-                );
-                return exists ? prev : [...prev, transcript];
-              });
-            }
-          } else {
-            console.log('AgentView: Unknown event type:', data.type, data);
-          }
-        } catch (error) {
-          console.error('AgentView: Error parsing WebSocket message:', error, event.data);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('AgentView: WebSocket error:', error);
-      };
-
-      ws.onclose = () => {
-        console.log('AgentView: WebSocket closed');
-        wsRef.current = null;
-      };
-
-      wsRef.current = ws;
-
-      // Keep connection alive
-      keepAliveIntervalRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(' ');
-        }
-      }, 20000);
-
-    } catch (error) {
-      console.error('AgentView: Error connecting to WebSocket:', error);
-    }
-  };
+  // WebSocket connection removed - we now rely on post-call webhook transcription
+  // The PolicyholderView widget handles the real-time conversation
+  // AgentView polls for the complete transcription from the backend after the call ends
 
   // Poll for transcription - more frequently during active calls
   useEffect(() => {
@@ -350,6 +228,27 @@ export default function AgentView() {
             }
             
             console.log('AgentView: Updating transcriptions, new count:', newTranscriptions.length);
+            
+            // Detect if this is a more complete transcription
+            const isMoreComplete = prev.length > 0 && newTranscriptions.length > prev.length + 5;
+            
+            if (isMoreComplete && conversationId) {
+              console.log('AgentView: Detected more complete transcription, refreshing claim_id');
+              // Refresh claim_id asynchronously
+              (async () => {
+                try {
+                  const claimData = await api.getClaimFromConversation(conversationId);
+                  if (claimData && claimData.claim_id !== currentClaimId) {
+                    console.log('AgentView: Updated to new claim_id:', claimData.claim_id);
+                    setCurrentClaimId(claimData.claim_id);
+                    localStorage.setItem('currentClaimId', claimData.claim_id);
+                  }
+                } catch (error) {
+                  console.error('Error refreshing claim_id:', error);
+                }
+              })();
+            }
+            
             return newTranscriptions;
           });
           
@@ -477,16 +376,10 @@ export default function AgentView() {
     };
   }, [currentClaimId]);
 
-  // Cleanup WebSocket on unmount
+  // Cleanup SSE on unmount
   useEffect(() => {
     return () => {
-      if (keepAliveIntervalRef.current) {
-        clearInterval(keepAliveIntervalRef.current);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      // WebSocket cleanup removed - no longer using WebSocket
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
@@ -497,75 +390,92 @@ export default function AgentView() {
   return (
     <div style={{ padding: '20px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <h1 style={{ marginBottom: '20px', color: '#333' }}>Insurance Agent View</h1>
-      {currentClaimId && (
+      {(currentClaimId || conversationId) && (
         <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '4px', fontSize: '12px', color: '#1976d2' }}>
-          📋 Active Claim ID: {currentClaimId} | Logs: {logs.length} | Transcriptions: {transcriptions.length}
+          {conversationId && (
+            <span>📞 Conversation: {conversationId.substring(0, 20)}...</span>
+          )}
+          {conversationId && currentClaimId && <span> | </span>}
+          {currentClaimId && (
+            <span>📋 Claim: {currentClaimId.substring(0, 20)}...</span>
+          )}
+          {(currentClaimId || conversationId) && <span> | </span>}
+          <span>📝 Logs: {logs.length} | Transcriptions: {transcriptions.length}</span>
         </div>
       )}
       <div style={{ display: 'flex', gap: '20px', flex: 1, minHeight: 0 }}>
-        <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
-            <ClaimInterface claimId={currentClaimId} onClaimApproved={handleClaimApproved} />
-          </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '20px', borderTop: '1px solid #eee' }}>
-            <h2 style={{ marginBottom: '15px', color: '#333', fontSize: '18px' }}>Call Transcription</h2>
-            <div style={{ 
-              backgroundColor: '#f9f9f9', 
-              borderRadius: '4px', 
-              padding: '15px', 
-              maxHeight: '400px', 
-              overflowY: 'auto',
-              border: '1px solid #e0e0e0',
-              fontFamily: 'monospace',
-              fontSize: '14px'
-            }}>
-              {transcriptions.length === 0 ? (
-                <div style={{ color: '#666', fontStyle: 'italic', textAlign: 'center', padding: '20px' }}>
-                  {conversationId ? (
-                    <>
-                      <div>📝 Waiting for post-call transcription...</div>
-                      <div style={{ fontSize: '11px', marginTop: '8px', color: '#999' }}>
-                        Conversation ID: {conversationId.substring(0, 20)}...
-                      </div>
-                      <div style={{ fontSize: '11px', marginTop: '4px', color: '#999' }}>
-                        Polling backend every 5 seconds for webhook data...
-                      </div>
-                      <div style={{ fontSize: '11px', marginTop: '4px', color: '#666', fontStyle: 'normal' }}>
-                        💡 Transcription will appear here after the call ends
-                      </div>
-                    </>
-                  ) : (
-                    'No active conversation. Waiting for call to start...'
-                  )}
-                </div>
-              ) : (
-                transcriptions.map((transcript, index) => (
-                  <div 
-                    key={index} 
-                    style={{ 
-                      marginBottom: '12px',
-                      padding: '10px',
-                      backgroundColor: transcript.speaker === 'user' ? '#e3f2fd' : '#f1f8e9',
-                      borderRadius: '6px',
-                      borderLeft: `4px solid ${transcript.speaker === 'user' ? '#2196f3' : '#4caf50'}`
-                    }}
-                  >
-                    <div style={{ fontWeight: 'bold', marginBottom: '6px', color: transcript.speaker === 'user' ? '#1976d2' : '#388e3c', fontSize: '12px' }}>
-                      {transcript.speaker === 'user' ? '👤 Policyholder' : '🤖 Agent'}
-                    </div>
-                    <div style={{ color: '#333', lineHeight: '1.5' }}>{transcript.text}</div>
-                    <div style={{ fontSize: '11px', color: '#999', marginTop: '6px' }}>
-                      {new Date(transcript.timestamp).toLocaleTimeString()}
-                    </div>
+        {/* Left Panel - Claim Details (Full Height) */}
+        <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', overflow: 'auto' }}>
+          <ClaimInterface claimId={currentClaimId} onClaimApproved={handleClaimApproved} />
+        </div>
+
+        {/* Right Panel - Call Transcription (Top) and Agent Logs (Bottom) */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Call Transcription - Top Right */}
+          <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid #eee' }}>
+              <h2 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Call Transcription</h2>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+              <div style={{ 
+                backgroundColor: '#f9f9f9', 
+                borderRadius: '4px', 
+                padding: '15px', 
+                minHeight: '100%',
+                border: '1px solid #e0e0e0',
+                fontFamily: 'monospace',
+                fontSize: '14px'
+              }}>
+                {transcriptions.length === 0 ? (
+                  <div style={{ color: '#666', fontStyle: 'italic', textAlign: 'center', padding: '20px' }}>
+                    {conversationId ? (
+                      <>
+                        <div>📝 Waiting for post-call transcription...</div>
+                        <div style={{ fontSize: '11px', marginTop: '8px', color: '#999' }}>
+                          Conversation ID: {conversationId.substring(0, 20)}...
+                        </div>
+                        <div style={{ fontSize: '11px', marginTop: '4px', color: '#999' }}>
+                          Polling backend every 5 seconds for webhook data...
+                        </div>
+                        <div style={{ fontSize: '11px', marginTop: '4px', color: '#666', fontStyle: 'normal' }}>
+                          💡 Transcription will appear here after the call ends
+                        </div>
+                      </>
+                    ) : (
+                      'No active conversation. Waiting for call to start...'
+                    )}
                   </div>
-                ))
-              )}
-              <div ref={transcriptionsEndRef} />
+                ) : (
+                  transcriptions.map((transcript, index) => (
+                    <div 
+                      key={index} 
+                      style={{ 
+                        marginBottom: '12px',
+                        padding: '10px',
+                        backgroundColor: transcript.speaker === 'user' ? '#e3f2fd' : '#f1f8e9',
+                        borderRadius: '6px',
+                        borderLeft: `4px solid ${transcript.speaker === 'user' ? '#2196f3' : '#4caf50'}`
+                      }}
+                    >
+                      <div style={{ fontWeight: 'bold', marginBottom: '6px', color: transcript.speaker === 'user' ? '#1976d2' : '#388e3c', fontSize: '12px' }}>
+                        {transcript.speaker === 'user' ? '👤 Policyholder' : '🤖 Agent'}
+                      </div>
+                      <div style={{ color: '#333', lineHeight: '1.5' }}>{transcript.text}</div>
+                      <div style={{ fontSize: '11px', color: '#999', marginTop: '6px' }}>
+                        {new Date(transcript.timestamp).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={transcriptionsEndRef} />
+              </div>
             </div>
           </div>
-        </div>
-        <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <SystemLogs claimId={currentClaimId} logs={logs} connectionStatus={sseConnectionStatus} />
+
+          {/* Agent Execution Logs - Bottom Right */}
+          <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', minHeight: 0 }}>
+            <SystemLogs claimId={currentClaimId} logs={logs} connectionStatus={sseConnectionStatus} />
+          </div>
         </div>
       </div>
     </div>

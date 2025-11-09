@@ -92,6 +92,11 @@ export const api = {
     return response.data;
   },
 
+  async rejectClaim(claimId: string): Promise<{ status: string; claim_id: string }> {
+    const response = await axios.post(`${API_BASE_URL}/claim/${claimId}/reject`);
+    return response.data;
+  },
+
   async getConversationTranscription(conversationId: string): Promise<{ conversation_id: string; transcription: string; received_at: string }> {
     const response = await axios.get(`${API_BASE_URL}/conversation/${conversationId}/transcription`);
     return response.data;

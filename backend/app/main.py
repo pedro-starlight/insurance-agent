@@ -15,7 +15,24 @@ import hashlib
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+try:
+    load_dotenv()
+except PermissionError as e:
+    print(f"Warning: Could not load .env file due to permission error: {e}")
+    print("Attempting to manually load environment variables...")
+    # Fallback: manually load .env if dotenv fails
+    try:
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        if os.path.exists(env_path):
+            with open(env_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        os.environ[key.strip()] = value.strip()
+            print("✓ Successfully loaded .env manually")
+    except Exception as e2:
+        print(f"Warning: Could not manually load .env: {e2}")
 
 app = FastAPI(title="Insurance Agent API", version="1.0.0")
 
@@ -351,9 +368,27 @@ async def approve_claim(claim_id: str):
         raise HTTPException(status_code=404, detail="Claim not found")
     
     claim_service.update_claim(claim_id, status=ClaimStatus.APPROVED)
-    add_log(claim_id, "Claim approved and initiated by agent", "info")
+    add_log(claim_id, "✅ Claim approved and initiated by human agent", "success")
+    
+    # Send the message to policyholder by updating the claim status
+    # Frontend will poll for message updates
     
     return {"status": "approved", "claim_id": claim_id}
+
+
+@app.post("/claim/{claim_id}/reject")
+async def reject_claim(claim_id: str):
+    """Reject claim"""
+    claim = claim_service.get_claim(claim_id)
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    
+    claim_service.update_claim(claim_id, status=ClaimStatus.REJECTED)
+    add_log(claim_id, "❌ Claim rejected by human agent", "warning")
+    
+    # Frontend will poll for message updates
+    
+    return {"status": "rejected", "claim_id": claim_id}
 
 
 @app.get("/webhook/elevenlabs/transcription")
@@ -455,21 +490,40 @@ async def receive_transcription_webhook(request: Request):
         print(f"✓ Extracted conversation_id: {conversation_id}")
         
         # Build transcription text from transcript array
+        # Per ElevenLabs docs: https://elevenlabs.io/docs/agents-platform/workflows/post-call-webhooks
+        # - 'message' field may be truncated for long messages
+        # - 'original_message' field contains full, untruncated content (only populated when truncation occurs)
         transcript_array = data.get("transcript", [])
         transcription_parts = []
-        for entry in transcript_array:
+        
+        print(f"📝 Processing {len(transcript_array)} transcript entries...")
+        for idx, entry in enumerate(transcript_array):
             role = entry.get("role", "unknown")
-            # Use original_message (full) instead of message (truncated)
-            message = entry.get("original_message") or entry.get("message", "")
+            
+            # Use original_message if available (for truncated messages), otherwise use message
+            original_msg = entry.get("original_message")
+            regular_msg = entry.get("message", "")
+            
+            # Choose the appropriate message
+            message = original_msg if original_msg is not None else regular_msg
+            
+            # Debug logging for first few entries
+            if idx < 3:
+                print(f"  Entry {idx}: role={role}, has_original={original_msg is not None}, "
+                      f"msg_len={len(message) if message else 0}, "
+                      f"truncated={'...' in regular_msg if regular_msg else False}")
+            
             if message:
                 speaker_label = "Agent" if role == "agent" else "User"
                 transcription_parts.append(f"{speaker_label}: {message}")
         
         transcription_text = "\n".join(transcription_parts) if transcription_parts else json.dumps(transcript_array)
-        print(f"Built transcription text ({len(transcription_text)} chars): {transcription_text[:100]}...")
-        print(f"⚠️ Webhook received {len(transcript_array)} transcript entries")
+        print(f"✅ Built transcription: {len(transcription_parts)} parts, {len(transcription_text)} chars total")
+        print(f"   Preview: {transcription_text[:150]}...")
+        
+        # Check for incomplete conversations
         if len(transcript_array) < 3:
-            print(f"⚠️ WARNING: Incomplete transcript - expected multiple entries for a full conversation")
+            print(f"⚠️ WARNING: Short transcript ({len(transcript_array)} entries) - conversation may have been interrupted")
         
         # Store conversation transcription
         conversation = ConversationTranscription(
@@ -490,25 +544,57 @@ async def receive_transcription_webhook(request: Request):
                     "conversation_id": conversation_id,
                     "transcription": transcription_text,
                     "received_at": conversation.received_at.isoformat(),
-                    "raw_transcript": transcript_array
+                    "raw_transcript": transcript_array,
+                    "transcript_entry_count": len(transcript_array),
+                    "transcription_parts_count": len(transcription_parts),
+                    "webhook_type": webhook_type,
+                    "full_webhook_data": data  # Save complete webhook data for debugging
                 }, f, indent=2)
             print(f"✓ Saved conversation to file: {conversation_file}")
+            print(f"  - {len(transcript_array)} transcript entries")
+            print(f"  - {len(transcription_parts)} processed parts")
+            print(f"  - {len(transcription_text)} total characters")
         except Exception as e:
             print(f"Warning: Failed to save conversation to file: {e}")
         
-        # Create or get claim for this conversation
-        claim_id = claim_service.create_claim()
-        add_log(claim_id, f"Claim created for conversation: {conversation_id}", "info")
+        # Check if claim already exists for this conversation
+        existing_claim_id = conversation_to_claim.get(conversation_id)
         
-        # Store conversation_id in claim for reference and create mapping
-        claim_service.update_claim(claim_id, transcription=transcription_text, status=ClaimStatus.PROCESSING, conversation_id=conversation_id)
-        conversation_to_claim[conversation_id] = claim_id
+        if existing_claim_id:
+            # Update existing claim with new transcription
+            print(f"⚠️ Updating existing claim {existing_claim_id} for conversation {conversation_id}")
+            claim_id = existing_claim_id
+            claim_service.update_claim(
+                claim_id,
+                transcription=transcription_text,
+                status=ClaimStatus.PROCESSING
+            )
+            add_log(claim_id, f"Claim updated with new transcription ({len(transcript_array)} entries)", "info")
+        else:
+            # Create new claim
+            claim_id = claim_service.create_claim()
+            add_log(claim_id, f"Claim created for conversation: {conversation_id}", "info")
+            claim_service.update_claim(
+                claim_id,
+                transcription=transcription_text,
+                status=ClaimStatus.PROCESSING,
+                conversation_id=conversation_id
+            )
+            conversation_to_claim[conversation_id] = claim_id
         
         # Define log callback for agent
         def log_callback(message: str, log_type: str = "info"):
             add_log(claim_id, message, log_type)
         
-        # Process claim with unified agent
+        # Skip agent processing for incomplete transcripts
+        should_process_agent = len(transcript_array) >= 3
+        
+        if not should_process_agent:
+            print(f"⏸️ Skipping agent processing - incomplete transcript. Waiting for complete webhook.")
+            add_log(claim_id, f"Waiting for complete transcript (currently {len(transcript_array)} entries)", "info")
+            return {"status": "received", "conversation_id": conversation_id, "claim_id": claim_id, "processed": False}
+        
+        # Process claim with unified agent (only for complete transcripts)
         add_log(claim_id, "Starting unified agent processing...", "info")
         try:
             agent_output = await process_claim_with_agent(
@@ -544,7 +630,7 @@ async def receive_transcription_webhook(request: Request):
             import traceback
             traceback.print_exc()
         
-        return {"status": "received", "conversation_id": conversation_id, "claim_id": claim_id}
+        return {"status": "received", "conversation_id": conversation_id, "claim_id": claim_id, "processed": True}
     
     except json.JSONDecodeError as e:
         print(f"JSON decode error: {e}")
@@ -571,23 +657,30 @@ async def get_latest_conversation():
     # If nothing in memory, check file system
     conversations_dir = os.path.join(os.path.dirname(__file__), 'data', 'conversations')
     if os.path.exists(conversations_dir):
-        files = [f for f in os.listdir(conversations_dir) if f.endswith('.json')]
+        files = [f for f in os.listdir(conversations_dir) if f.endswith('.json') and not f.startswith('.')]
         if files:
-            # Get the most recent file by modification time
-            latest_file = max(
-                [os.path.join(conversations_dir, f) for f in files],
-                key=os.path.getmtime
-            )
-            try:
-                with open(latest_file, 'r') as f:
-                    data = json.load(f)
-                    return {
-                        "conversation_id": data["conversation_id"],
-                        "transcription": data["transcription"],
-                        "received_at": data["received_at"]
-                    }
-            except Exception as e:
-                print(f"Error loading latest conversation from file: {e}")
+            # Load all conversations and find the most recent by received_at timestamp
+            conversations = []
+            for filename in files:
+                file_path = os.path.join(conversations_dir, filename)
+                try:
+                    with open(file_path, 'r') as f:
+                        data = json.load(f)
+                        if 'received_at' in data and 'conversation_id' in data:
+                            conversations.append(data)
+                except Exception as e:
+                    print(f"Warning: Could not load conversation file {filename}: {e}")
+                    continue
+            
+            if conversations:
+                # Sort by received_at timestamp (most recent first)
+                latest = max(conversations, key=lambda x: x.get('received_at', ''))
+                print(f"✓ Found latest conversation: {latest['conversation_id']} (received_at: {latest.get('received_at')})")
+                return {
+                    "conversation_id": latest["conversation_id"],
+                    "transcription": latest["transcription"],
+                    "received_at": latest["received_at"]
+                }
     
     raise HTTPException(status_code=404, detail="No conversations found")
 

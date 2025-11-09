@@ -20,21 +20,56 @@ export default function PolicyholderView() {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Listen for claim_id updates from AgentView (when approve/reject is clicked)
+  useEffect(() => {
+    const checkForClaimId = () => {
+      const storedClaimId = localStorage.getItem('currentClaimId');
+      if (storedClaimId && storedClaimId !== currentClaimId) {
+        console.log('PolicyholderView: Found claim_id in localStorage:', storedClaimId);
+        setCurrentClaimId(storedClaimId);
+      }
+    };
+
+    // Check immediately
+    checkForClaimId();
+
+    // Listen for storage changes (cross-tab communication)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'currentClaimId' && e.newValue) {
+        console.log('PolicyholderView: Claim ID updated via storage event:', e.newValue);
+        setCurrentClaimId(e.newValue);
+      }
+    };
+
+    // Poll localStorage in case storage event doesn't fire (same tab)
+    const interval = setInterval(checkForClaimId, 1000);
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [currentClaimId]);
+
   useEffect(() => {
     // Poll for message updates if we have a claim
-    if (currentClaimId && !isCallActive) {
+    if (currentClaimId) {
       const interval = setInterval(async () => {
         try {
           const messageData = await api.getMessage(currentClaimId);
           setMessage(messageData);
-        } catch (error) {
-          console.error('Error fetching message:', error);
+          console.log('PolicyholderView: Message fetched:', messageData);
+        } catch (error: any) {
+          // Silently handle 404 - claim might still be processing
+          if (error.response?.status !== 404) {
+            console.error('Error fetching message:', error);
+          }
         }
       }, 2000);
 
       return () => clearInterval(interval);
     }
-  }, [currentClaimId, isCallActive]);
+  }, [currentClaimId]);
 
   const startCall = async () => {
     setIsCallActive(true);
@@ -220,8 +255,11 @@ export default function PolicyholderView() {
 
     const handleNewCall = () => {
       console.log('PolicyholderView: New call starting, clearing previous conversation');
-      // Clear previous conversation data in localStorage
+      // Clear previous conversation and claim data in localStorage
       localStorage.removeItem('currentConversationId');
+      localStorage.removeItem('currentClaimId');
+      setCurrentClaimId(null);
+      setMessage(null);
       // Notify other tabs to clear their conversation
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'clearConversation',

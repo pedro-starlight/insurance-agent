@@ -13,6 +13,8 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
   const [actionDetails, setActionDetails] = useState<ActionDetails | null>(null);
   const [messageDetails, setMessageDetails] = useState<MessageDetails | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [claimDecision, setClaimDecision] = useState<'approved' | 'rejected' | null>(null);
 
   useEffect(() => {
     if (claimId) {
@@ -28,13 +30,24 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
 
     try {
       const [coverage, action, message] = await Promise.all([
-        api.getCoverage(claimId),
-        api.getAction(claimId),
-        api.getMessage(claimId),
+        api.getCoverage(claimId).catch(err => {
+          // Silently handle 404 - claim might still be processing
+          if (err.response?.status === 404) return null;
+          throw err;
+        }),
+        api.getAction(claimId).catch(err => {
+          if (err.response?.status === 404) return null;
+          throw err;
+        }),
+        api.getMessage(claimId).catch(err => {
+          if (err.response?.status === 404) return null;
+          throw err;
+        }),
       ]);
-      setClaimDetails(coverage);
-      setActionDetails(action);
-      setMessageDetails(message);
+      
+      if (coverage) setClaimDetails(coverage);
+      if (action) setActionDetails(action);
+      if (message) setMessageDetails(message);
     } catch (error) {
       console.error('Error fetching claim data:', error);
     }
@@ -46,7 +59,11 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
     setIsApproving(true);
     try {
       await api.approveClaim(claimId);
+      setClaimDecision('approved');
       onClaimApproved();
+      
+      // Store claim_id in localStorage so PolicyholderView can fetch the message
+      localStorage.setItem('currentClaimId', claimId);
     } catch (error) {
       console.error('Error approving claim:', error);
     } finally {
@@ -54,27 +71,58 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
     }
   };
 
+  const handleReject = async () => {
+    if (!claimId) return;
+
+    setIsRejecting(true);
+    try {
+      await api.rejectClaim(claimId);
+      setClaimDecision('rejected');
+      
+      // Store claim_id in localStorage so PolicyholderView can fetch the message
+      localStorage.setItem('currentClaimId', claimId);
+    } catch (error) {
+      console.error('Error rejecting claim:', error);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
   if (!claimId) {
     return (
-      <div
-        style={{
-          padding: '20px',
-          border: '2px dashed #ccc',
-          borderRadius: '8px',
-          textAlign: 'center',
-          color: '#999',
-        }}
-      >
-        No active claim. Waiting for policyholder to initiate a call...
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #eee', backgroundColor: 'white' }}>
+          <h2 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Claim Details</h2>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div
+            style={{
+              padding: '20px',
+              border: '2px dashed #ccc',
+              borderRadius: '8px',
+              textAlign: 'center',
+              color: '#999',
+            }}
+          >
+            No active claim. Waiting for policyholder to initiate a call...
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!claimDetails || !actionDetails || !messageDetails) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <div style={{ marginBottom: '15px', color: '#666' }}>Loading claim details...</div>
-        <div style={{ fontSize: '12px', color: '#999' }}>Waiting for agent to process claim...</div>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #eee', backgroundColor: 'white' }}>
+          <h2 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Claim Details</h2>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ marginBottom: '15px', color: '#666' }}>Loading claim details...</div>
+            <div style={{ fontSize: '12px', color: '#999' }}>Waiting for agent to process claim...</div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -100,10 +148,15 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
   const safetyStatus = claim?.safety_status || claim?.safetyStatus;
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h2 style={{ marginBottom: '20px', color: '#333' }}>Claim Details</h2>
-
-      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Sticky Header */}
+      <div style={{ padding: '20px', borderBottom: '1px solid #eee', backgroundColor: 'white' }}>
+        <h2 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Claim Details</h2>
+      </div>
+      
+      {/* Scrollable Content */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '8px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
           <div>
             <h3 style={{ marginBottom: '8px', fontSize: '13px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Full Name</h3>
@@ -218,23 +271,63 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
         </div>
       </div>
 
-      <button
-        onClick={handleApprove}
-        disabled={isApproving}
-        style={{
-          padding: '12px 24px',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          backgroundColor: '#007bff',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: isApproving ? 'not-allowed' : 'pointer',
-          opacity: isApproving ? 0.6 : 1,
-        }}
-      >
-        {isApproving ? 'Approving...' : 'Approve & Initiate Claim'}
-      </button>
+      {claimDecision ? (
+        <div
+          style={{
+            padding: '15px',
+            backgroundColor: claimDecision === 'approved' ? '#d4edda' : '#f8d7da',
+            borderRadius: '8px',
+            border: `2px solid ${claimDecision === 'approved' ? '#c3e6cb' : '#f5c6cb'}`,
+            textAlign: 'center',
+            fontWeight: 'bold',
+            color: claimDecision === 'approved' ? '#155724' : '#721c24',
+          }}
+        >
+          {claimDecision === 'approved' 
+            ? '✅ Claim Approved - Message sent to policyholder'
+            : '❌ Claim Rejected - Message sent to policyholder'}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '15px' }}>
+          <button
+            onClick={handleApprove}
+            disabled={isApproving || isRejecting}
+            style={{
+              flex: 1,
+              padding: '12px 24px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: isApproving || isRejecting ? 'not-allowed' : 'pointer',
+              opacity: isApproving || isRejecting ? 0.6 : 1,
+            }}
+          >
+            {isApproving ? 'Approving...' : '✅ Approve & Initiate Claim'}
+          </button>
+          <button
+            onClick={handleReject}
+            disabled={isApproving || isRejecting}
+            style={{
+              flex: 1,
+              padding: '12px 24px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: isApproving || isRejecting ? 'not-allowed' : 'pointer',
+              opacity: isApproving || isRejecting ? 0.6 : 1,
+            }}
+          >
+            {isRejecting ? 'Rejecting...' : '❌ Reject Claim'}
+          </button>
+        </div>
+      )}
+      </div>
     </div>
   );
 }
