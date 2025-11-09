@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { api, ClaimDetails, ActionDetails } from '../api/routes';
+import { api, ClaimDetails, ActionDetails, MessageDetails } from '../api/routes';
 
 interface ClaimInterfaceProps {
   claimId: string | null;
@@ -11,6 +11,7 @@ interface ClaimInterfaceProps {
 export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterfaceProps) {
   const [claimDetails, setClaimDetails] = useState<ClaimDetails | null>(null);
   const [actionDetails, setActionDetails] = useState<ActionDetails | null>(null);
+  const [messageDetails, setMessageDetails] = useState<MessageDetails | null>(null);
   const [isApproving, setIsApproving] = useState(false);
 
   useEffect(() => {
@@ -26,12 +27,14 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
     if (!claimId) return;
 
     try {
-      const [coverage, action] = await Promise.all([
+      const [coverage, action, message] = await Promise.all([
         api.getCoverage(claimId),
         api.getAction(claimId),
+        api.getMessage(claimId),
       ]);
       setClaimDetails(coverage);
       setActionDetails(action);
+      setMessageDetails(message);
     } catch (error) {
       console.error('Error fetching claim data:', error);
     }
@@ -67,7 +70,7 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
     );
   }
 
-  if (!claimDetails || !actionDetails) {
+  if (!claimDetails || !actionDetails || !messageDetails) {
     return (
       <div style={{ padding: '20px', textAlign: 'center' }}>
         <div style={{ marginBottom: '15px', color: '#666' }}>Loading claim details...</div>
@@ -197,6 +200,22 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
             <strong>Estimated Time:</strong> {action.estimated_time}
           </p>
         )}
+      </div>
+
+      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f3f0ff', borderRadius: '8px', border: '1px solid #d4c5f9' }}>
+        <h3 style={{ marginBottom: '12px', color: '#5a2d82', fontWeight: 'bold' }}>Policyholder Message</h3>
+        <div style={{ marginBottom: '12px' }}>
+          <h4 style={{ fontSize: '13px', color: '#7c4dff', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Assessment</h4>
+          <p style={{ color: '#5a2d82', lineHeight: '1.6', margin: 0 }}>
+            {messageDetails.message.assessment}
+          </p>
+        </div>
+        <div>
+          <h4 style={{ fontSize: '13px', color: '#7c4dff', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Next Actions</h4>
+          <p style={{ color: '#5a2d82', lineHeight: '1.6', margin: 0 }}>
+            {messageDetails.message.next_actions}
+          </p>
+        </div>
       </div>
 
       <button
