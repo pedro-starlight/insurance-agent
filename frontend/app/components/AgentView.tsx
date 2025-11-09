@@ -45,6 +45,11 @@ export default function AgentView() {
   // Get claim ID and conversation ID from localStorage and listen for updates
   useEffect(() => {
     const checkForClaim = () => {
+      // Skip auto-loading if demo was just reset
+      if (localStorage.getItem('demoReset') === 'true') {
+        return;
+      }
+      
       const storedClaimId = localStorage.getItem('currentClaimId');
       if (storedClaimId && storedClaimId !== currentClaimId) {
         setCurrentClaimId(storedClaimId);
@@ -52,6 +57,12 @@ export default function AgentView() {
     };
 
     const checkForConversation = async () => {
+      // Skip auto-loading if demo was just reset
+      if (localStorage.getItem('demoReset') === 'true') {
+        console.log('AgentView: Demo reset active, skipping auto-load');
+        return;
+      }
+      
       const storedConversationId = localStorage.getItem('currentConversationId');
       console.log('AgentView: Checking localStorage for conversationId:', storedConversationId, 'current:', conversationId);
       
@@ -417,36 +428,43 @@ export default function AgentView() {
               <h2 style={{ margin: 0, color: '#333', fontSize: '18px' }}>Call Transcription</h2>
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
-              <div style={{ 
-                backgroundColor: '#f9f9f9', 
-                borderRadius: '4px', 
-                padding: '15px', 
-                minHeight: '100%',
-                border: '1px solid #e0e0e0',
-                fontFamily: 'monospace',
-                fontSize: '14px'
-              }}>
-                {transcriptions.length === 0 ? (
-                  <div style={{ color: '#666', fontStyle: 'italic', textAlign: 'center', padding: '20px' }}>
-                    {conversationId ? (
-                      <>
-                        <div>📝 Waiting for post-call transcription...</div>
-                        <div style={{ fontSize: '11px', marginTop: '8px', color: '#999' }}>
-                          Conversation ID: {conversationId.substring(0, 20)}...
-                        </div>
-                        <div style={{ fontSize: '11px', marginTop: '4px', color: '#999' }}>
-                          Polling backend every 5 seconds for webhook data...
-                        </div>
-                        <div style={{ fontSize: '11px', marginTop: '4px', color: '#666', fontStyle: 'normal' }}>
-                          💡 Transcription will appear here after the call ends
-                        </div>
-                      </>
-                    ) : (
-                      'No active conversation. Waiting for call to start...'
-                    )}
-                  </div>
-                ) : (
-                  transcriptions.map((transcript, index) => (
+              {transcriptions.length === 0 ? (
+                <div style={{ 
+                  border: '2px dashed #ccc',
+                  borderRadius: '4px', 
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  color: '#999',
+                  fontStyle: 'italic'
+                }}>
+                  {conversationId ? (
+                    <>
+                      <div>📝 Waiting for post-call transcription...</div>
+                      <div style={{ fontSize: '11px', marginTop: '8px', color: '#999' }}>
+                        Conversation ID: {conversationId.substring(0, 20)}...
+                      </div>
+                      <div style={{ fontSize: '11px', marginTop: '4px', color: '#999' }}>
+                        Polling backend every 5 seconds for webhook data...
+                      </div>
+                      <div style={{ fontSize: '11px', marginTop: '4px', color: '#999', fontStyle: 'normal' }}>
+                        💡 Transcription will appear here after the call ends
+                      </div>
+                    </>
+                  ) : (
+                    'No active conversation. Waiting for call to start...'
+                  )}
+                </div>
+              ) : (
+                <div style={{ 
+                  backgroundColor: '#f9f9f9', 
+                  borderRadius: '4px', 
+                  padding: '15px', 
+                  minHeight: '100%',
+                  border: '1px solid #e0e0e0',
+                  fontFamily: 'monospace',
+                  fontSize: '14px'
+                }}>
+                  {transcriptions.map((transcript, index) => (
                     <div 
                       key={index} 
                       style={{ 
@@ -465,10 +483,10 @@ export default function AgentView() {
                         {new Date(transcript.timestamp).toLocaleTimeString()}
                       </div>
                     </div>
-                  ))
-                )}
-                <div ref={transcriptionsEndRef} />
-              </div>
+                  ))}
+                  <div ref={transcriptionsEndRef} />
+                </div>
+              )}
             </div>
           </div>
 

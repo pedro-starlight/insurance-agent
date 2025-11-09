@@ -72,8 +72,10 @@ export const api = {
     return response.data;
   },
 
-  async getMessage(claimId: string): Promise<MessageDetails> {
-    const response = await axios.get(`${API_BASE_URL}/claim/message/${claimId}`);
+  async getMessage(claimId: string, preview: boolean = false): Promise<MessageDetails> {
+    const response = await axios.get(`${API_BASE_URL}/claim/message/${claimId}`, {
+      params: { preview }
+    });
     return response.data;
   },
 

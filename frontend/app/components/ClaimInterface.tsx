@@ -39,7 +39,7 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
           if (err.response?.status === 404) return null;
           throw err;
         }),
-        api.getMessage(claimId).catch(err => {
+        api.getMessage(claimId, true).catch(err => {  // preview=true for agent view
           if (err.response?.status === 404) return null;
           throw err;
         }),

@@ -20,9 +20,23 @@ export default function PolicyholderView() {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Clear state on mount if demo was reset
+  useEffect(() => {
+    if (localStorage.getItem('demoReset') === 'true') {
+      console.log('PolicyholderView: Demo was reset, clearing stale data');
+      setCurrentClaimId(null);
+      setMessage(null);
+    }
+  }, []);
+
   // Listen for claim_id updates from AgentView (when approve/reject is clicked)
   useEffect(() => {
     const checkForClaimId = () => {
+      // Skip checking if demo was reset
+      if (localStorage.getItem('demoReset') === 'true') {
+        return;
+      }
+      
       const storedClaimId = localStorage.getItem('currentClaimId');
       if (storedClaimId && storedClaimId !== currentClaimId) {
         console.log('PolicyholderView: Found claim_id in localStorage:', storedClaimId);
@@ -38,6 +52,13 @@ export default function PolicyholderView() {
       if (e.key === 'currentClaimId' && e.newValue) {
         console.log('PolicyholderView: Claim ID updated via storage event:', e.newValue);
         setCurrentClaimId(e.newValue);
+      }
+      
+      // Listen for clearConversation event (from Reset Demo button)
+      if (e.key === 'clearConversation') {
+        console.log('PolicyholderView: Clearing conversation and claim data');
+        setCurrentClaimId(null);
+        setMessage(null);
       }
     };
 
@@ -258,6 +279,10 @@ export default function PolicyholderView() {
       // Clear previous conversation and claim data in localStorage
       localStorage.removeItem('currentConversationId');
       localStorage.removeItem('currentClaimId');
+      
+      // Clear demo reset flag - we're starting a fresh call
+      localStorage.removeItem('demoReset');
+      
       setCurrentClaimId(null);
       setMessage(null);
       // Notify other tabs to clear their conversation

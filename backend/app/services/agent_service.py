@@ -110,8 +110,6 @@ async def process_claim_with_agent(
         print(f"[{log_type.upper()}] {message}")
     
     try:
-        log("Starting unified agent processing", "info")
-        
         # Initialize OpenAI client
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:

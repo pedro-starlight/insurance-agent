@@ -43,6 +43,57 @@ def update_claim(claim_id: str, **kwargs) -> Optional[Claim]:
     return claim
 
 
+def get_claim_by_conversation_id(conversation_id: str) -> Optional[Claim]:
+    """
+    Find claim by conversation ID.
+    
+    Args:
+        conversation_id: Unique conversation identifier
+        
+    Returns:
+        Claim object or None if not found
+    """
+    for claim in claims_store.values():
+        if hasattr(claim, 'conversation_id') and claim.conversation_id == conversation_id:
+            return claim
+    return None
+
+
+def create_claim_from_conversation(conversation_id: str, transcription: str) -> str:
+    """
+    Create a new claim with conversation data.
+    
+    Args:
+        conversation_id: Unique conversation identifier
+        transcription: Full transcription text
+        
+    Returns:
+        The new claim ID
+    """
+    claim_id = create_claim()
+    update_claim(
+        claim_id,
+        transcription=transcription,
+        conversation_id=conversation_id,
+        status=ClaimStatus.PENDING
+    )
+    return claim_id
+
+
+def update_claim_status(claim_id: str, status: ClaimStatus) -> Optional[Claim]:
+    """
+    Update claim status with validation.
+    
+    Args:
+        claim_id: Unique claim identifier
+        status: New claim status
+        
+    Returns:
+        Updated Claim object or None if not found
+    """
+    return update_claim(claim_id, status=status)
+
+
 # Note: extract_claim_fields moved to unified agent service
 # Claim extraction is now part of the unified agent processing
 
