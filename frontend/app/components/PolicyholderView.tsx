@@ -19,6 +19,9 @@ export default function PolicyholderView() {
   const [message, setMessage] = useState<MessageDetails | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Add WebSocket and keep-alive references for legacy/manual call flow
+  const wsRef = useRef<WebSocket | null>(null);
+  const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clear state on mount if demo was reset
   useEffect(() => {
