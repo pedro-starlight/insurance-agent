@@ -5,6 +5,8 @@ import ClaimInterface from './ClaimInterface';
 import SystemLogs, { SystemLog } from './SystemLogs';
 import { api } from '../api/routes';
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+
 interface TranscriptionMessage {
   type: string;
   speaker: 'user' | 'agent';
@@ -332,7 +334,7 @@ export default function AgentView() {
     }
     
     // Create EventSource for SSE
-    const eventSource = new EventSource(`http://localhost:8000/claim/stream/${currentClaimId}`);
+    const eventSource = new EventSource(`${API_BASE_URL}/claim/stream/${currentClaimId}`);
     
     eventSource.onopen = () => {
       console.log('AgentView: SSE connection opened');
