@@ -6,6 +6,9 @@ FROM node:18-alpine AS builder
 # Set working directory
 WORKDIR /app
 
+# Ensure public directory exists even if repo doesn't include one
+RUN mkdir -p public
+
 # Copy package files
 COPY package*.json ./
 
