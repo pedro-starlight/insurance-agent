@@ -99,6 +99,457 @@
       ],
       "exclusions": [],
       "deductible": 0
+    },
+    {
+      "policy_id": "POL-004",
+      "policyholder_name": "Emily Davis",
+      "policy_type": "Comprehensive",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Roadside assistance is covered for mechanical breakdowns, flat tires, dead battery, and lockouts."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related towing and repairs are covered under comprehensive policy."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered with on-site repair or tow to nearest garage."
+        }
+      ],
+      "exclusions": [
+        "Vehicles over 15 years old without special coverage"
+      ],
+      "deductible": 100
+    },
+    {
+      "policy_id": "POL-005",
+      "policyholder_name": "David Wilson",
+      "policy_type": "Standard",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Basic roadside assistance is covered for breakdowns."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered."
+        }
+      ],
+      "exclusions": [
+        "Engine failures",
+        "Transmission issues"
+      ],
+      "deductible": 250
+    },
+    {
+      "policy_id": "POL-006",
+      "policyholder_name": "Jennifer Martinez",
+      "policy_type": "Premium",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "All roadside assistance services are covered including premium concierge services."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Full accident coverage including rental car and taxi services."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "All mechanical failures are covered regardless of vehicle age."
+        },
+        {
+          "condition": "rental_car",
+          "covered": true,
+          "description": "Rental car coverage up to 7 days included."
+        }
+      ],
+      "exclusions": [],
+      "deductible": 0
+    },
+    {
+      "policy_id": "POL-007",
+      "policyholder_name": "Robert Anderson",
+      "policy_type": "Comprehensive",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Roadside assistance is covered for mechanical breakdowns, flat tires, dead battery, and lockouts."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related towing and repairs are covered."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "Engine failures are covered if vehicle is less than 10 years old."
+        }
+      ],
+      "exclusions": [
+        "Pre-existing mechanical issues not reported"
+      ],
+      "deductible": 100
+    },
+    {
+      "policy_id": "POL-008",
+      "policyholder_name": "Lisa Taylor",
+      "policy_type": "Standard",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Basic roadside assistance is covered for breakdowns."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related services are covered."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered."
+        }
+      ],
+      "exclusions": [
+        "Engine failures",
+        "Vehicles over 12 years old"
+      ],
+      "deductible": 250
+    },
+    {
+      "policy_id": "POL-009",
+      "policyholder_name": "James Thomas",
+      "policy_type": "Premium",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "All roadside assistance services are covered including premium concierge services."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Full accident coverage including rental car and taxi services."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "All mechanical failures are covered regardless of vehicle age."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Premium tire service with mobile repair unit."
+        },
+        {
+          "condition": "rental_car",
+          "covered": true,
+          "description": "Rental car coverage up to 7 days included."
+        }
+      ],
+      "exclusions": [],
+      "deductible": 0
+    },
+    {
+      "policy_id": "POL-010",
+      "policyholder_name": "Patricia Jackson",
+      "policy_type": "Comprehensive",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Roadside assistance is covered for mechanical breakdowns, flat tires, dead battery, and lockouts."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related towing and repairs are covered."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered with on-site repair or tow to nearest garage."
+        }
+      ],
+      "exclusions": [
+        "Damage from racing or illegal activities"
+      ],
+      "deductible": 100
+    },
+    {
+      "policy_id": "POL-011",
+      "policyholder_name": "Christopher White",
+      "policy_type": "Standard",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Basic roadside assistance is covered for breakdowns."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered."
+        }
+      ],
+      "exclusions": [
+        "Engine failures",
+        "Transmission issues",
+        "Vehicles over 12 years old"
+      ],
+      "deductible": 250
+    },
+    {
+      "policy_id": "POL-012",
+      "policyholder_name": "Maria Garcia",
+      "policy_type": "Premium",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "All roadside assistance services are covered including premium concierge services."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Full accident coverage including rental car and taxi services."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "All mechanical failures are covered regardless of vehicle age."
+        },
+        {
+          "condition": "rental_car",
+          "covered": true,
+          "description": "Rental car coverage up to 7 days included."
+        }
+      ],
+      "exclusions": [],
+      "deductible": 0
+    },
+    {
+      "policy_id": "POL-013",
+      "policyholder_name": "Daniel Harris",
+      "policy_type": "Comprehensive",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Roadside assistance is covered for mechanical breakdowns, flat tires, dead battery, and lockouts."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related towing and repairs are covered."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "Engine failures are covered if vehicle is less than 10 years old."
+        }
+      ],
+      "exclusions": [
+        "Pre-existing mechanical issues not reported",
+        "Vehicles over 15 years old without special coverage"
+      ],
+      "deductible": 100
+    },
+    {
+      "policy_id": "POL-014",
+      "policyholder_name": "Nancy Martinez",
+      "policy_type": "Standard",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Basic roadside assistance is covered for breakdowns."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related services are covered."
+        }
+      ],
+      "exclusions": [
+        "Engine failures",
+        "Transmission issues"
+      ],
+      "deductible": 250
+    },
+    {
+      "policy_id": "POL-015",
+      "policyholder_name": "Matthew Robinson",
+      "policy_type": "Premium",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "All roadside assistance services are covered including premium concierge services."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Full accident coverage including rental car and taxi services."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "All mechanical failures are covered regardless of vehicle age."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Premium tire service with mobile repair unit."
+        },
+        {
+          "condition": "rental_car",
+          "covered": true,
+          "description": "Rental car coverage up to 7 days included."
+        }
+      ],
+      "exclusions": [],
+      "deductible": 0
+    },
+    {
+      "policy_id": "POL-016",
+      "policyholder_name": "Karen Clark",
+      "policy_type": "Comprehensive",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Roadside assistance is covered for mechanical breakdowns, flat tires, dead battery, and lockouts."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related towing and repairs are covered."
+        }
+      ],
+      "exclusions": [
+        "Damage from racing or illegal activities"
+      ],
+      "deductible": 100
+    },
+    {
+      "policy_id": "POL-017",
+      "policyholder_name": "Steven Rodriguez",
+      "policy_type": "Standard",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Basic roadside assistance is covered for breakdowns."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered."
+        }
+      ],
+      "exclusions": [
+        "Engine failures",
+        "Vehicles over 12 years old"
+      ],
+      "deductible": 250
+    },
+    {
+      "policy_id": "POL-018",
+      "policyholder_name": "Betty Lewis",
+      "policy_type": "Premium",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "All roadside assistance services are covered including premium concierge services."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Full accident coverage including rental car and taxi services."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "All mechanical failures are covered regardless of vehicle age."
+        },
+        {
+          "condition": "rental_car",
+          "covered": true,
+          "description": "Rental car coverage up to 7 days included."
+        }
+      ],
+      "exclusions": [],
+      "deductible": 0
+    },
+    {
+      "policy_id": "POL-019",
+      "policyholder_name": "Kevin Lee",
+      "policy_type": "Comprehensive",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Roadside assistance is covered for mechanical breakdowns, flat tires, dead battery, and lockouts."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related towing and repairs are covered."
+        },
+        {
+          "condition": "engine_failure",
+          "covered": true,
+          "description": "Engine failures are covered if vehicle is less than 10 years old."
+        }
+      ],
+      "exclusions": [
+        "Pre-existing mechanical issues not reported"
+      ],
+      "deductible": 100
+    },
+    {
+      "policy_id": "POL-020",
+      "policyholder_name": "Dorothy Walker",
+      "policy_type": "Standard",
+      "coverage_rules": [
+        {
+          "condition": "breakdown",
+          "covered": true,
+          "description": "Basic roadside assistance is covered for breakdowns."
+        },
+        {
+          "condition": "accident",
+          "covered": true,
+          "description": "Accident-related services are covered."
+        },
+        {
+          "condition": "flat_tire",
+          "covered": true,
+          "description": "Flat tire service is covered."
+        }
+      ],
+      "exclusions": [
+        "Engine failures",
+        "Transmission issues",
+        "Vehicles over 12 years old"
+      ],
+      "deductible": 250
     }
   ],
   "garages": [
@@ -136,6 +587,150 @@
       "latitude": 40.7282,
       "longitude": -74.0776,
       "services": ["tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-005",
+      "name": "Westside Auto Center",
+      "location": "567 West End Ave, San Francisco",
+      "latitude": 37.7749,
+      "longitude": -122.4194,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-006",
+      "name": "Eastside Mobile Mechanics",
+      "location": "890 Market St, San Francisco",
+      "latitude": 37.7849,
+      "longitude": -122.4094,
+      "services": ["repair"],
+      "available": true
+    },
+    {
+      "id": "GAR-007",
+      "name": "Quick Fix Auto Shop",
+      "location": "234 Mission St, San Francisco",
+      "latitude": 37.7899,
+      "longitude": -122.3974,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-008",
+      "name": "Bay Area Towing",
+      "location": "456 Embarcadero, San Francisco",
+      "latitude": 37.7999,
+      "longitude": -122.3944,
+      "services": ["tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-009",
+      "name": "Midtown Service Station",
+      "location": "678 5th Ave, Los Angeles",
+      "latitude": 34.0522,
+      "longitude": -118.2437,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-010",
+      "name": "Hollywood Auto Repair",
+      "location": "901 Sunset Blvd, Los Angeles",
+      "latitude": 34.0622,
+      "longitude": -118.2537,
+      "services": ["repair"],
+      "available": true
+    },
+    {
+      "id": "GAR-011",
+      "name": "Santa Monica Garage",
+      "location": "123 Ocean Ave, Los Angeles",
+      "latitude": 34.0222,
+      "longitude": -118.4937,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-012",
+      "name": "Downtown LA Towing",
+      "location": "345 Spring St, Los Angeles",
+      "latitude": 34.0422,
+      "longitude": -118.2337,
+      "services": ["tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-013",
+      "name": "North Side Auto Works",
+      "location": "789 Clark St, Chicago",
+      "latitude": 41.8781,
+      "longitude": -87.6298,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-014",
+      "name": "Loop Service Center",
+      "location": "456 State St, Chicago",
+      "latitude": 41.8881,
+      "longitude": -87.6398,
+      "services": ["repair"],
+      "available": true
+    },
+    {
+      "id": "GAR-015",
+      "name": "Lakefront Towing",
+      "location": "234 Michigan Ave, Chicago",
+      "latitude": 41.8681,
+      "longitude": -87.6198,
+      "services": ["tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-016",
+      "name": "South Side Repair Shop",
+      "location": "567 Halsted St, Chicago",
+      "latitude": 41.8581,
+      "longitude": -87.6498,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-017",
+      "name": "Brooklyn Auto Service",
+      "location": "890 Flatbush Ave, Brooklyn",
+      "latitude": 40.6782,
+      "longitude": -73.9442,
+      "services": ["repair", "tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-018",
+      "name": "Queens Mobile Repair",
+      "location": "123 Queens Blvd, Queens",
+      "latitude": 40.7282,
+      "longitude": -73.8442,
+      "services": ["repair"],
+      "available": true
+    },
+    {
+      "id": "GAR-019",
+      "name": "Bronx Towing Services",
+      "location": "456 Grand Concourse, Bronx",
+      "latitude": 40.8282,
+      "longitude": -73.9242,
+      "services": ["tow"],
+      "available": true
+    },
+    {
+      "id": "GAR-020",
+      "name": "Staten Island Auto Center",
+      "location": "789 Victory Blvd, Staten Island",
+      "latitude": 40.6082,
+      "longitude": -74.1442,
+      "services": ["repair", "tow"],
       "available": true
     }
   ]

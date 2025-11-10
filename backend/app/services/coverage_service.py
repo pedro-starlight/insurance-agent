@@ -1,7 +1,6 @@
 import json
 import os
 from typing import Optional, Dict, List
-from app.models import Claim, CoverageDecision
 
 
 def load_policies() -> List[Dict]:
