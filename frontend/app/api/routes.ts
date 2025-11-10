@@ -9,6 +9,25 @@ export interface AudioRequest {
 export interface ClaimDetails {
   claim_id: string;
   claim_details?: {
+    full_name?: string;
+    car_model?: {
+      make?: string;
+      model?: string;
+      year?: string;
+    };
+    location_data?: {
+      free_text?: string;
+      components?: {
+        city?: string;
+        road_or_street?: string;
+        direction?: string;
+        landmark_or_exit?: string;
+      };
+    };
+    assistance_type?: string;
+    safety_status?: string;
+    confirmation?: string;
+    // Legacy fields for backward compatibility
     policyholder_name?: string;
     car_info?: string;
     location?: string;
