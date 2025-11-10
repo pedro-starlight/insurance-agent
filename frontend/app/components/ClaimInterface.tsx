@@ -142,7 +142,7 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
   const carModelName = carModel?.model;
   const carYear = carModel?.year;
   const locationText = claim?.location_data?.free_text || claim?.location;
-  const city = claim?.location_data?.components?.city || claim?.city;
+  const city = claim?.location_data?.components?.city;
   const assistanceType = claim?.assistance_type;
   const safetyStatus = claim?.safety_status;
 
