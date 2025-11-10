@@ -137,21 +137,14 @@ export default function ClaimInterface({ claimId, onClaimApproved }: ClaimInterf
   const action = actionDetails?.action;
   const claim = claimDetails?.claim_details;
 
-  const carModel = claim?.car_model || claim?.carModel;
-  const carMake = carModel?.make || claim?.car_make;
-  const carModelName = carModel?.model || claim?.car_model;
-  const carYear = carModel?.year || claim?.car_year;
-  const locationText =
-    claim?.location_data?.free_text ||
-    claim?.locationData?.free_text ||
-    claim?.location ||
-    claim?.location_text;
-  const city =
-    claim?.location_data?.components?.city ||
-    claim?.locationData?.components?.city ||
-    claim?.city;
-  const assistanceType = claim?.assistance_type || claim?.assistanceType;
-  const safetyStatus = claim?.safety_status || claim?.safetyStatus;
+  const carModel = claim?.car_model;
+  const carMake = carModel?.make;
+  const carModelName = carModel?.model;
+  const carYear = carModel?.year;
+  const locationText = claim?.location_data?.free_text || claim?.location;
+  const city = claim?.location_data?.components?.city || claim?.city;
+  const assistanceType = claim?.assistance_type;
+  const safetyStatus = claim?.safety_status;
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
