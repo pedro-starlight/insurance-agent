@@ -47,11 +47,10 @@ export default function AgentView() {
   // Get claim ID and conversation ID from localStorage and listen for updates
   useEffect(() => {
     const checkForClaim = () => {
-      // Skip auto-loading if demo was just reset
       if (localStorage.getItem('demoReset') === 'true') {
         return;
       }
-      
+
       const storedClaimId = localStorage.getItem('currentClaimId');
       if (storedClaimId && storedClaimId !== currentClaimId) {
         setCurrentClaimId(storedClaimId);
@@ -59,71 +58,46 @@ export default function AgentView() {
     };
 
     const checkForConversation = async () => {
-      // Skip auto-loading if demo was just reset
       if (localStorage.getItem('demoReset') === 'true') {
         console.log('AgentView: Demo reset active, skipping auto-load');
         return;
       }
-      
+
       const storedConversationId = localStorage.getItem('currentConversationId');
-      console.log('AgentView: Checking localStorage for conversationId:', storedConversationId, 'current:', conversationId);
-      
-      if (storedConversationId) {
-        if (storedConversationId !== conversationId) {
-          console.log('AgentView: Found new conversationId in localStorage:', storedConversationId);
-          setConversationId(storedConversationId);
-          // WebSocket connection removed - we now use post-call webhook transcription
-          
-          // Try to get claim_id from conversation_id
-          try {
-            const claimData = await api.getClaimFromConversation(storedConversationId);
-            if (claimData && claimData.claim_id) {
-              console.log('AgentView: Found claim_id from conversation:', claimData.claim_id);
-              setCurrentClaimId(claimData.claim_id);
-              localStorage.setItem('currentClaimId', claimData.claim_id);
-            }
-          } catch (error: any) {
-            // Claim might not be created yet - this is expected during active calls
-            if (error.response?.status !== 404) {
-              console.error('AgentView: Error fetching claim from conversation:', error);
-            }
-          }
-        }
-      } else {
-        console.log('AgentView: No conversationId in localStorage, checking backend...');
-        // Check backend for latest conversation
-        try {
-          const latest = await api.getLatestConversation();
-          if (latest && latest.conversation_id && latest.conversation_id !== conversationId) {
-            console.log('AgentView: Found latest conversation from backend:', latest.conversation_id);
+
+      try {
+        const latest = await api.getLatestConversation();
+        if (latest && latest.conversation_id) {
+          if (latest.conversation_id !== storedConversationId) {
+            console.log('AgentView: Updating conversationId from backend latest:', latest.conversation_id);
             setConversationId(latest.conversation_id);
             localStorage.setItem('currentConversationId', latest.conversation_id);
-            
-            // Try to get claim_id from conversation_id
+
             try {
               const claimData = await api.getClaimFromConversation(latest.conversation_id);
               if (claimData && claimData.claim_id) {
-                console.log('AgentView: Found claim_id from conversation:', claimData.claim_id);
                 setCurrentClaimId(claimData.claim_id);
                 localStorage.setItem('currentClaimId', claimData.claim_id);
               }
             } catch (error: any) {
-              // Claim might not be created yet
               if (error.response?.status !== 404) {
-                console.error('AgentView: Error fetching claim from conversation:', error);
+                console.error('AgentView: Error fetching claim from latest conversation:', error);
               }
             }
+          } else if (!conversationId) {
+            setConversationId(storedConversationId);
           }
-        } catch (error: any) {
-          // No conversation yet - this is expected
-          if (error.response?.status !== 404) {
-            console.error('AgentView: Error fetching latest conversation:', error);
-          }
+        }
+      } catch (error: any) {
+        if (storedConversationId && !conversationId) {
+          setConversationId(storedConversationId);
+        }
+        if (error.response?.status !== 404) {
+          console.error('AgentView: Error fetching latest conversation:', error);
         }
       }
     };
 
-    // Check immediately
     checkForClaim();
     checkForConversation();
 
